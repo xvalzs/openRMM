@@ -17,6 +17,9 @@ import { getSessionCookie, verifySession, type Session } from "./session.js";
 import { registerAgentRoutes, createSocketRegistry } from "./routes/agent.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
+import { registerAlertRoutes } from "./routes/alerts.js";
+import { ShellHub, registerShellRoutes } from "./shell.js";
+import { AlertService } from "./alerts.js";
 
 const VERSION = "0.1.0";
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -46,6 +49,8 @@ async function main(): Promise<void> {
   }
 
   const sockets = createSocketRegistry();
+  const shellHub = new ShellHub();
+  const alertService = new AlertService(store);
 
   const app = Fastify({
     logger: { level: process.env.RMM_LOG_LEVEL ?? "info" },
@@ -77,9 +82,11 @@ async function main(): Promise<void> {
     protocolVersion: PROTOCOL_VERSION,
   }));
 
-  registerAgentRoutes(app, store, sockets);
+  registerAgentRoutes(app, store, sockets, shellHub, alertService);
   registerAuthRoutes(app, store, sessionSecret);
   registerDeviceRoutes(app, store);
+  registerAlertRoutes(app, store);
+  registerShellRoutes(app, store, sockets, shellHub);
 
   // ---- Serve the built dashboard (if present) --------------------------
   const dashboardDist = path.resolve(here, "..", "..", "dashboard", "dist");

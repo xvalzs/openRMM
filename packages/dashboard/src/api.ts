@@ -2,7 +2,15 @@
  * Thin typed wrapper around the OpenRMM REST API.
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
-import type { DeviceListResponse, SessionInfo } from "@openrmm/shared";
+import type {
+  Alert,
+  AlertListResponse,
+  AlertRule,
+  AlertRuleInput,
+  AlertSettings,
+  DeviceListResponse,
+  SessionInfo,
+} from "@openrmm/shared";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -14,10 +22,14 @@ export class ApiError extends Error {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers: Record<string, string> = {};
+  // Only send a content-type when there is a body: Fastify rejects empty
+  // bodies with a JSON content-type.
+  if (init?.body !== undefined) headers["content-type"] = "application/json";
   const res = await fetch(path, {
     credentials: "same-origin",
-    headers: { "content-type": "application/json" },
     ...init,
+    headers: { ...headers, ...(init?.headers ?? {}) },
   });
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -36,4 +48,39 @@ export const api = {
     }),
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
   devices: () => request<DeviceListResponse>("/api/devices"),
+
+  // Shell sessions
+  createShell: (deviceId: string) =>
+    request<{ sessionId: string; shell: string }>(`/api/devices/${deviceId}/shell`, {
+      method: "POST",
+    }),
+  endShell: (sessionId: string) =>
+    request<{ ok: true }>(`/api/shells/${sessionId}`, { method: "DELETE" }),
+
+  // Alert rules
+  alertRules: () => request<{ rules: AlertRule[] }>("/api/alert-rules"),
+  createAlertRule: (input: AlertRuleInput) =>
+    request<AlertRule>("/api/alert-rules", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateAlertRule: (id: string, patch: Partial<AlertRuleInput>) =>
+    request<AlertRule>(`/api/alert-rules/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
+  deleteAlertRule: (id: string) =>
+    request<{ ok: true }>(`/api/alert-rules/${id}`, { method: "DELETE" }),
+
+  // Alerts
+  alerts: (state: "active" | "resolved" | "all") =>
+    request<AlertListResponse>(`/api/alerts?state=${state}&limit=100`),
+
+  // Alert settings
+  alertSettings: () => request<AlertSettings>("/api/alert-settings"),
+  updateAlertSettings: (webhookUrl: string) =>
+    request<AlertSettings>("/api/alert-settings", {
+      method: "PUT",
+      body: JSON.stringify({ webhookUrl }),
+    }),
 };

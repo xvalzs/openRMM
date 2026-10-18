@@ -3,10 +3,13 @@ import type { SessionInfo } from "@openrmm/shared";
 import { api } from "./api.js";
 import Login from "./Login.js";
 import Devices from "./Devices.js";
+import Alerts from "./Alerts.js";
+import Topbar, { type View } from "./Topbar.js";
 
 export default function App(): React.JSX.Element {
   const [session, setSession] = useState<SessionInfo | null>(null);
   const [checking, setChecking] = useState(true);
+  const [view, setView] = useState<View>("devices");
 
   useEffect(() => {
     let cancelled = false;
@@ -47,5 +50,10 @@ export default function App(): React.JSX.Element {
     return <Login onLogin={setSession} />;
   }
 
-  return <Devices session={session} onLogout={handleLogout} />;
+  return (
+    <div className="shell">
+      <Topbar session={session} view={view} onNavigate={setView} onLogout={handleLogout} />
+      {view === "devices" ? <Devices /> : <Alerts />}
+    </div>
+  );
 }

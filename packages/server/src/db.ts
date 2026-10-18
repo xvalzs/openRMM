@@ -5,7 +5,16 @@
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
-import type { Device, DriveInfo, MachineInfo, Metrics } from "@openrmm/shared";
+import { randomUUID } from "node:crypto";
+import type {
+  Alert,
+  AlertRule,
+  AlertRuleInput,
+  Device,
+  DriveInfo,
+  MachineInfo,
+  Metrics,
+} from "@openrmm/shared";
 import { hashPassword, randomHex, safeEqualHex } from "./crypto.js";
 
 export interface DeviceRow {
@@ -79,6 +88,32 @@ export class Store {
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
       );
+
+      CREATE TABLE IF NOT EXISTS alert_rules (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        device_id TEXT,
+        metric TEXT NOT NULL,
+        operator TEXT NOT NULL,
+        threshold REAL NOT NULL,
+        duration_sec INTEGER NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS alerts (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        value REAL NOT NULL,
+        state TEXT NOT NULL DEFAULT 'active',
+        created_at INTEGER NOT NULL,
+        last_seen_at INTEGER NOT NULL,
+        resolved_at INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_alerts_state ON alerts(state);
+      CREATE INDEX IF NOT EXISTS idx_alerts_rule_device ON alerts(rule_id, device_id, state);
     `);
   }
 
@@ -243,6 +278,171 @@ export class Store {
       .all() as unknown as DeviceRow[];
     return rows.map(rowToDevice);
   }
+
+  // ---- alert rules -------------------------------------------------------
+
+  createAlertRule(input: AlertRuleInput): AlertRule {
+    const id = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO alert_rules (id, name, device_id, metric, operator, threshold, duration_sec, enabled, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id,
+        input.name,
+        input.deviceId ?? null,
+        input.metric,
+        input.operator,
+        input.threshold,
+        Math.max(0, Math.round(input.durationSec)),
+        input.enabled === false ? 0 : 1,
+        Date.now(),
+      );
+    return this.getAlertRule(id)!;
+  }
+
+  getAlertRule(id: string): AlertRule | null {
+    const row = this.db
+      .prepare("SELECT * FROM alert_rules WHERE id = ?")
+      .get(id) as AlertRuleRow | undefined;
+    return row ? rowToRule(row) : null;
+  }
+
+  listAlertRules(): AlertRule[] {
+    const rows = this.db
+      .prepare("SELECT * FROM alert_rules ORDER BY created_at ASC")
+      .all() as unknown as AlertRuleRow[];
+    return rows.map(rowToRule);
+  }
+
+  updateAlertRule(id: string, patch: Partial<AlertRuleInput>): AlertRule | null {
+    const existing = this.getAlertRule(id);
+    if (!existing) return null;
+    const next: AlertRuleInput = {
+      name: patch.name ?? existing.name,
+      deviceId: patch.deviceId !== undefined ? patch.deviceId : existing.deviceId,
+      metric: patch.metric ?? existing.metric,
+      operator: patch.operator ?? existing.operator,
+      threshold: patch.threshold ?? existing.threshold,
+      durationSec:
+        patch.durationSec !== undefined ? patch.durationSec : existing.durationSec,
+      enabled: patch.enabled !== undefined ? patch.enabled : existing.enabled,
+    };
+    this.db
+      .prepare(
+        `UPDATE alert_rules SET name = ?, device_id = ?, metric = ?, operator = ?,
+           threshold = ?, duration_sec = ?, enabled = ? WHERE id = ?`,
+      )
+      .run(
+        next.name,
+        next.deviceId ?? null,
+        next.metric,
+        next.operator,
+        next.threshold,
+        Math.max(0, Math.round(next.durationSec)),
+        next.enabled ? 1 : 0,
+        id,
+      );
+    return this.getAlertRule(id);
+  }
+
+  deleteAlertRule(id: string): boolean {
+    const res = this.db.prepare("DELETE FROM alert_rules WHERE id = ?").run(id);
+    return res.changes > 0;
+  }
+
+  // ---- alerts --------------------------------------------------------------
+
+  findActiveAlert(ruleId: string, deviceId: string): AlertRow | null {
+    const row = this.db
+      .prepare(
+        "SELECT * FROM alerts WHERE rule_id = ? AND device_id = ? AND state = 'active'",
+      )
+      .get(ruleId, deviceId) as AlertRow | undefined;
+    return row ?? null;
+  }
+
+  createAlert(
+    rule: AlertRule,
+    deviceId: string,
+    value: number,
+    now: number,
+  ): AlertRow {
+    const id = randomUUID();
+    this.db
+      .prepare(
+        `INSERT INTO alerts (id, rule_id, device_id, value, state, created_at, last_seen_at)
+         VALUES (?, ?, ?, ?, 'active', ?, ?)`,
+      )
+      .run(id, rule.id, deviceId, value, now, now);
+    return this.db.prepare("SELECT * FROM alerts WHERE id = ?").get(id) as unknown as AlertRow;
+  }
+
+  touchAlert(id: string, value: number, now: number): void {
+    this.db
+      .prepare("UPDATE alerts SET value = ?, last_seen_at = ? WHERE id = ?")
+      .run(value, now, id);
+  }
+
+  resolveAlert(id: string, now: number): void {
+    this.db
+      .prepare("UPDATE alerts SET state = 'resolved', resolved_at = ? WHERE id = ?")
+      .run(now, id);
+  }
+
+  /** List alerts, newest first. */
+  listAlerts(state: "active" | "resolved" | "all", limit: number): Alert[] {
+    const where = state === "all" ? "" : "WHERE state = ?";
+    const params = state === "all" ? [limit] : [state, limit];
+    const rows = this.db
+      .prepare(
+        `SELECT a.*, d.hostname AS device_hostname, r.name AS rule_name,
+                r.metric AS rule_metric, r.operator AS rule_operator,
+                r.threshold AS rule_threshold
+         FROM alerts a
+         LEFT JOIN devices d ON d.id = a.device_id
+         LEFT JOIN alert_rules r ON r.id = a.rule_id
+         ${where}
+         ORDER BY a.created_at DESC LIMIT ?`,
+      )
+      .all(...params) as unknown as (AlertRow & {
+      device_hostname: string | null;
+      rule_name: string | null;
+      rule_metric: string | null;
+      rule_operator: string | null;
+      rule_threshold: number | null;
+    })[];
+    return rows.map((row) => ({
+      id: row.id,
+      ruleId: row.rule_id,
+      ruleName: row.rule_name ?? "deleted rule",
+      deviceId: row.device_id,
+      deviceHostname: row.device_hostname ?? "unknown",
+      metric: (row.rule_metric ?? "cpu_usage") as Alert["metric"],
+      operator: (row.rule_operator ?? ">") as Alert["operator"],
+      threshold: row.rule_threshold ?? 0,
+      value: row.value,
+      message: buildAlertMessage(
+        row.device_hostname ?? "unknown",
+        row.rule_metric ?? "cpu_usage",
+        row.rule_operator ?? ">",
+        row.rule_threshold ?? 0,
+        row.value,
+      ),
+      state: row.state as Alert["state"],
+      createdAt: row.created_at,
+      lastSeenAt: row.last_seen_at,
+      resolvedAt: row.resolved_at,
+    }));
+  }
+
+  deviceHostname(deviceId: string): string {
+    const row = this.db
+      .prepare("SELECT hostname FROM devices WHERE id = ?")
+      .get(deviceId) as { hostname: string } | undefined;
+    return row?.hostname ?? "unknown";
+  }
 }
 
 function rowToDevice(row: DeviceRow): Device {
@@ -272,4 +472,56 @@ function rowToDevice(row: DeviceRow): Device {
     firstSeen: row.first_seen,
     lastSeen: row.last_seen,
   };
+}
+
+interface AlertRuleRow {
+  id: string;
+  name: string;
+  device_id: string | null;
+  metric: string;
+  operator: string;
+  threshold: number;
+  duration_sec: number;
+  enabled: number;
+  created_at: number;
+}
+
+interface AlertRow {
+  id: string;
+  rule_id: string;
+  device_id: string;
+  value: number;
+  state: string;
+  created_at: number;
+  last_seen_at: number;
+  resolved_at: number | null;
+}
+
+function rowToRule(row: AlertRuleRow): AlertRule {
+  return {
+    id: row.id,
+    name: row.name,
+    deviceId: row.device_id,
+    metric: row.metric as AlertRule["metric"],
+    operator: row.operator as AlertRule["operator"],
+    threshold: row.threshold,
+    durationSec: row.duration_sec,
+    enabled: row.enabled === 1,
+    createdAt: row.created_at,
+  };
+}
+
+function buildAlertMessage(
+  hostname: string,
+  metric: string,
+  operator: string,
+  threshold: number,
+  value: number,
+): string {
+  const label: Record<string, string> = {
+    cpu_usage: "CPU usage",
+    mem_pct: "memory usage",
+    disk_pct: "disk usage",
+  };
+  return `${hostname}: ${label[metric] ?? metric} ${operator} ${threshold}% (current ${value.toFixed(1)}%)`;
 }

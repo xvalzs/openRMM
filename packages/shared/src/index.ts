@@ -65,12 +65,31 @@ export interface RegisterResponse {
 export type AgentMessage =
   | { type: "hello"; protocolVersion: number }
   | { type: "heartbeat"; ts: number; metrics: Metrics }
-  | { type: "pong"; ts: number };
+  | { type: "pong"; ts: number }
+  | { type: "shell_started"; sessionId: string; pid: number }
+  | { type: "shell_data"; sessionId: string; data: string }
+  | { type: "shell_exit"; sessionId: string; code: number | null };
 
 /** Messages sent by the server over the WebSocket. */
 export type ServerMessage =
   | { type: "ping"; ts: number }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "shell_start"; sessionId: string; shell: string; args: string[] }
+  | { type: "shell_input"; sessionId: string; data: string }
+  | { type: "shell_end"; sessionId: string };
+
+/** Browser → server messages on a shell channel WebSocket. */
+export type ShellClientMessage =
+  | { type: "stdin"; data: string }
+  | { type: "ping"; ts: number };
+
+/** Server → browser messages on a shell channel WebSocket. */
+export type ShellServerMessage =
+  | { type: "started"; pid: number }
+  | { type: "data"; data: string }
+  | { type: "exited"; code: number | null }
+  | { type: "error"; message: string }
+  | { type: "pong"; ts: number };
 
 /** A device as returned by the dashboard REST API. */
 export interface Device {
@@ -106,4 +125,58 @@ export interface DeviceListResponse {
 /** Response of `GET /api/auth/me` when logged in. */
 export interface SessionInfo {
   username: string;
+}
+
+// ---- Alert rules ------------------------------------------------------------
+
+export type AlertMetric = "cpu_usage" | "mem_pct" | "disk_pct";
+export type AlertOperator = ">" | ">=" | "<" | "<=";
+
+export interface AlertRule {
+  id: string;
+  name: string;
+  /** null = applies to every device. */
+  deviceId: string | null;
+  metric: AlertMetric;
+  operator: AlertOperator;
+  threshold: number;
+  /** The condition must hold this long (seconds) before an alert fires. */
+  durationSec: number;
+  enabled: boolean;
+  createdAt: number;
+}
+
+export interface AlertRuleInput {
+  name: string;
+  deviceId?: string | null;
+  metric: AlertMetric;
+  operator: AlertOperator;
+  threshold: number;
+  durationSec: number;
+  enabled?: boolean;
+}
+
+export interface Alert {
+  id: string;
+  ruleId: string;
+  ruleName: string;
+  deviceId: string;
+  deviceHostname: string;
+  metric: AlertMetric;
+  operator: AlertOperator;
+  threshold: number;
+  value: number;
+  message: string;
+  state: "active" | "resolved";
+  createdAt: number;
+  lastSeenAt: number;
+  resolvedAt: number | null;
+}
+
+export interface AlertListResponse {
+  alerts: Alert[];
+}
+
+export interface AlertSettings {
+  webhookUrl: string;
 }

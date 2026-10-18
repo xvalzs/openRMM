@@ -15,6 +15,8 @@ import {
 } from "@openrmm/shared";
 import type { Store } from "../db.js";
 import { randomHex, sha256Hex } from "../crypto.js";
+import type { AlertService } from "../alerts.js";
+import type { ShellHub } from "../shell.js";
 
 export interface AgentSockets {
   /** deviceId -> live socket (only the newest registration wins). */
@@ -50,6 +52,8 @@ export function registerAgentRoutes(
   app: FastifyInstance,
   store: Store,
   sockets: AgentSockets,
+  hub: ShellHub,
+  alerts: AlertService,
 ): void {
   // ---- Registration ---------------------------------------------------
 
@@ -133,9 +137,17 @@ export function registerAgentRoutes(
         case "hello":
           break;
         case "heartbeat":
-          if (msg.metrics) store.applyHeartbeat(deviceId, msg.metrics, true);
+          if (msg.metrics) {
+            store.applyHeartbeat(deviceId, msg.metrics, true);
+            alerts.evaluate(deviceId, msg.metrics);
+          }
           break;
         case "pong":
+          break;
+        case "shell_started":
+        case "shell_data":
+        case "shell_exit":
+          hub.handleAgentMessage(msg);
           break;
         default:
           send(socket, { type: "error", message: `unknown message type: ${String((msg as { type?: string }).type)}` });

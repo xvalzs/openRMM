@@ -4,6 +4,7 @@ import { formatAgo, formatBytes, formatDateTime, formatPercent, formatUptime } f
 interface DeviceDetailProps {
   device: Device;
   onClose: () => void;
+  onOpenShell?: () => void;
 }
 
 function Stat({ label, value }: { label: string; value: string }): React.JSX.Element {
@@ -15,7 +16,7 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
   );
 }
 
-export default function DeviceDetail({ device, onClose }: DeviceDetailProps): React.JSX.Element {
+export default function DeviceDetail({ device, onClose, onOpenShell }: DeviceDetailProps): React.JSX.Element {
   const memPct = device.totalMem > 0 ? (device.memUsed / device.totalMem) * 100 : 0;
 
   return (
@@ -31,6 +32,12 @@ export default function DeviceDetail({ device, onClose }: DeviceDetailProps): Re
         </div>
         <button className="ghost" onClick={onClose} aria-label="Close detail">
           ✕
+        </button>
+      </div>
+
+      <div className="detail-actions">
+        <button className="shell-btn" onClick={onOpenShell} disabled={!device.online} title={device.online ? "Open a remote shell" : "Device is offline"}>
+          ⌁ Open shell
         </button>
       </div>
 

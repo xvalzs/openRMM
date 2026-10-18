@@ -31,13 +31,15 @@ WebSocket channel, and you watch everything from a web dashboard.
 - Live metrics via heartbeat every 15 s; devices flip to *offline* after 45 s of silence
 - Dashboard with sign-in (scrypt-hashed passwords, HMAC-signed session cookies), device list, resource usage bars, detail pane
 - Reconnection with exponential backoff, watchdog, and re-registration on every connect
+- **Remote shell**: interactive PowerShell (Windows) / bash (macOS) sessions from the dashboard, streamed over the agent's WebSocket channel (xterm.js terminal)
+- **Alert rules**: threshold rules on CPU/memory/disk per device or fleet-wide, with a minimum-duration window, active → resolved lifecycle, and webhooks on state transitions
 - **Native service installation**: `service install` registers the agent as a Windows service (WinSW, auto-restart on failure) or a macOS LaunchAgent (KeepAlive)
 - TLS support via `RMM_TLS_CERT` / `RMM_TLS_KEY` (or any reverse proxy)
 
 ### Roadmap
 
-Remote shell, command/job dispatch, alert rules + webhooks, Linux agent
-builds, multi-user permissions, patch/update management.
+Command/job dispatch (batch scripts to many devices), Linux agent builds,
+multi-user permissions, patch/update management.
 
 ## Requirements
 
@@ -115,6 +117,29 @@ Agent settings:
 | `RMM_AGENT_HOME`     | Config directory (default `~/.openrmm-agent`)          |
 | `RMM_SERVER_URL`     | Fallback for `--server` on install                     |
 | `RMM_INSTALL_KEY`    | Fallback for `--key` on install                        |
+
+## Remote shell
+
+Select an online device in the dashboard and press **Open shell**. The
+session runs over the agent's existing WebSocket channel:
+
+- Windows: PowerShell; macOS/Linux: bash (piped, not a full TTY — line-based
+  programs and simple REPLs work, full-screen TUIs like editors do not)
+- output is streamed to the browser terminal (xterm.js) with ANSI colors
+- closing the terminal ends the shell on the endpoint
+
+## Alert rules
+
+Create rules on the **Alerts** page: a metric (CPU %, memory %, disk %),
+comparison, threshold, and a minimum duration the condition must hold.
+Rules can target one device or the whole fleet and are evaluated on every
+heartbeat. Firing produces an *active* alert; when the condition clears it
+moves to *resolved*. Both transitions POST to the configured webhook as
+
+```json
+{ "event": "alert.fired", "alert": { ... } }
+{ "event": "alert.resolved", "alert": { ... } }
+```
 
 ## Running agents as services
 

@@ -1,15 +1,11 @@
 import { useEffect, useState } from "react";
-import type { Device, DeviceListResponse, SessionInfo } from "@openrmm/shared";
+import type { Device, DeviceListResponse } from "@openrmm/shared";
 import { api } from "./api.js";
 import { formatAgo, formatBytes, formatPercent, formatUptime } from "./format.js";
 import DeviceDetail from "./DeviceDetail.js";
+import ShellPanel from "./ShellPanel.js";
 
 const POLL_MS = 5_000;
-
-interface DevicesProps {
-  session: SessionInfo;
-  onLogout: () => void;
-}
 
 function UsageBar({ value, warnAt = 80 }: { value: number; warnAt?: number }): React.JSX.Element {
   const level = value >= warnAt ? "high" : value >= warnAt * 0.75 ? "mid" : "low";
@@ -32,10 +28,11 @@ function primaryDrive(device: Device): { mount: string; usedPct: number } | null
   };
 }
 
-export default function Devices({ session, onLogout }: DevicesProps): React.JSX.Element {
+export default function Devices(): React.JSX.Element {
   const [data, setData] = useState<DeviceListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [shellDevice, setShellDevice] = useState<Device | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,27 +63,15 @@ export default function Devices({ session, onLogout }: DevicesProps): React.JSX.
     devices.find((d) => d.id === selectedId) ?? devices[0] ?? null;
 
   return (
-    <div className="shell">
-      <header className="topbar">
-        <div className="topbar-brand">
-          <span className="brand-mark" aria-hidden="true" />
-          <span className="brand-name">OpenRMM</span>
-        </div>
-        <div className="topbar-stats">
-          <span className="pill">
-            <span className="dot online" /> {data?.summary.online ?? 0} online
-          </span>
-          <span className="pill">{data?.summary.total ?? 0} total</span>
-        </div>
-        <div className="topbar-user">
-          <span>{session.username}</span>
-          <button className="ghost" onClick={onLogout}>
-            Sign out
-          </button>
-        </div>
-      </header>
-
+    <div className="device-view">
       {error && <div className="banner">{error}</div>}
+
+      <div className="summary-line">
+        <span className="pill">
+          <span className="dot online" /> {data?.summary.online ?? 0} online
+        </span>
+        <span className="pill">{data?.summary.total ?? 0} total</span>
+      </div>
 
       <main className="content">
         <section className="device-list">
@@ -170,8 +155,22 @@ export default function Devices({ session, onLogout }: DevicesProps): React.JSX.
           )}
         </section>
 
-        {selected && <DeviceDetail device={selected} onClose={() => setSelectedId(null)} />}
+        {selected && (
+          <DeviceDetail
+            device={selected}
+            onClose={() => setSelectedId(null)}
+            onOpenShell={() => setShellDevice(selected)}
+          />
+        )}
       </main>
+
+      {shellDevice && (
+        <ShellPanel
+          deviceId={shellDevice.id}
+          deviceName={shellDevice.hostname}
+          onClose={() => setShellDevice(null)}
+        />
+      )}
     </div>
   );
 }

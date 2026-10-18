@@ -11,6 +11,7 @@ import {
 } from "@openrmm/shared";
 import type { AgentConfig } from "./config.js";
 import { collectMachineInfo, collectMetrics } from "./inventory.js";
+import { createShellManager } from "./shells.js";
 
 export interface AgentClient {
   /** Runs until the process is killed. Never resolves. */
@@ -31,6 +32,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
   let socket: WebSocket | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+  const shells = createShellManager(send);
 
   async function register(): Promise<RegisterResponse> {
     const res = await fetch(`${config.serverUrl}/api/agent/register`, {
@@ -116,6 +118,12 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
           send({ type: "pong", ts: msg.ts });
         } else if (msg.type === "error") {
           log(`server error: ${msg.message}`);
+        } else if (
+          msg.type === "shell_start" ||
+          msg.type === "shell_input" ||
+          msg.type === "shell_end"
+        ) {
+          shells.handle(msg);
         }
       };
 
@@ -125,6 +133,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
 
       ws.onclose = (event) => {
         clearTimers();
+        shells.closeAll();
         if (socket === ws) socket = null;
         if (opened) {
           log(`disconnected (code ${event.code}${event.reason ? `, ${event.reason}` : ""})`);
@@ -160,6 +169,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
     stop: () => {
       stopped = true;
       clearTimers();
+      shells.closeAll();
       socket?.close();
     },
   };
