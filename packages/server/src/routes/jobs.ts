@@ -7,6 +7,7 @@ import type { JobCreateInput, JobDetail } from "@openrmm/shared";
 import type { Store } from "../db.js";
 import type { JobsService } from "../jobs.js";
 import { requireSession } from "./auth.js";
+import { audit } from "../audit.js";
 
 function parseJobBody(body: unknown): JobCreateInput | { error: string } {
   const b = (body ?? {}) as Partial<JobCreateInput>;
@@ -38,6 +39,10 @@ export function registerJobRoutes(
     const parsed = parseJobBody(req.body);
     if ("error" in parsed) return reply.code(400).send({ error: parsed.error });
     const job = jobs.dispatch(parsed, req.session!.username);
+    audit(store, req, "job.created", job.name, {
+      targets: job.total,
+      timeoutSec: job.timeoutSec,
+    });
     return reply.code(201).send(job);
   });
 
@@ -56,12 +61,14 @@ export function registerJobRoutes(
   app.post("/api/jobs/:id/cancel", { preHandler: requireSession }, async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!jobs.cancel(id)) return reply.code(404).send({ error: "job not found" });
+    audit(store, req, "job.cancelled", id);
     return reply.send({ ok: true });
   });
 
   app.delete("/api/jobs/:id", { preHandler: requireSession }, async (req, reply) => {
     const { id } = req.params as { id: string };
     if (!store.deleteJob(id)) return reply.code(404).send({ error: "job not found" });
+    audit(store, req, "job.deleted", id);
     return reply.send({ ok: true });
   });
 }

@@ -9,8 +9,9 @@ import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import type { AgentMessage, ServerMessage, ShellClientMessage, ShellServerMessage } from "@openrmm/shared";
 import type { Store } from "./db.js";
-import { requireAdmin, requireSession } from "./routes/auth.js";
+import { requireAdmin } from "./routes/auth.js";
 import type { AgentSockets } from "./routes/agent.js";
+import { audit } from "./audit.js";
 
 interface ShellSession {
   sessionId: string;
@@ -146,6 +147,7 @@ export function registerShellRoutes(
       shell,
       args,
     });
+    audit(store, req, "shell.created", device.hostname, { shell });
     return reply.send({ sessionId: session.sessionId, shell });
   });
 

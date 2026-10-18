@@ -6,6 +6,7 @@ import type { FastifyInstance } from "fastify";
 import type { UserCreateInput, UserRole } from "@openrmm/shared";
 import type { Store } from "../db.js";
 import { requireAdmin } from "./auth.js";
+import { audit } from "../audit.js";
 
 const ROLES: UserRole[] = ["admin", "operator"];
 
@@ -29,7 +30,9 @@ export function registerUserRoutes(app: FastifyInstance, store: Store): void {
     if (store.findUserByUsername(name)) {
       return reply.code(409).send({ error: "username already exists" });
     }
-    return reply.code(201).send(store.createUser(name, password, role as UserRole));
+    const created = store.createUser(name, password, role as UserRole);
+    audit(store, req, "user.created", name, { role });
+    return reply.code(201).send(created);
   });
 
   app.put("/api/users/:id", { preHandler: requireAdmin }, async (req, reply) => {
@@ -57,6 +60,7 @@ export function registerUserRoutes(app: FastifyInstance, store: Store): void {
       }
     }
     store.updateUser(userId, { password, role });
+    audit(store, req, "user.updated", existing.username, { role, passwordChanged: password !== undefined });
     return reply.send(store.findUserById(userId));
   });
 
@@ -71,6 +75,7 @@ export function registerUserRoutes(app: FastifyInstance, store: Store): void {
       return reply.code(400).send({ error: "cannot delete the last admin" });
     }
     store.deleteUser(userId);
+    audit(store, req, "user.deleted", existing.username);
     return reply.send({ ok: true });
   });
 }

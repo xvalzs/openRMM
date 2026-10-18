@@ -1125,3 +1125,86 @@ button.ghost.danger:hover {
 .job-stderr {
   color: var(--red);
 }
+
+/* ---- updates page ------------------------------------------------------------------ */
+
+.updates-page,
+.keys-page,
+.audit-page {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.update-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.update-form input[type="text"],
+.update-form .update-url,
+.update-form .update-sha {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+}
+
+.update-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.update-url {
+  max-width: 640px;
+}
+
+.update-sha {
+  max-width: 640px;
+}
+
+.pending-count {
+  color: var(--amber);
+  font-weight: 600;
+}
+
+/* ---- api keys ----------------------------------------------------------------------- */
+
+.key-created {
+  border-color: var(--accent);
+}
+
+.key-token-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.key-token {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+/* ---- audit --------------------------------------------------------------------------- */
+
+.audit-table td {
+  font-size: 12px;
+}
+
+.audit-table .mono {
+  font-size: 12px;
+}

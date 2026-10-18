@@ -3,15 +3,20 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import type {
+  AgentUpdate,
   Alert,
   AlertListResponse,
   AlertRule,
   AlertRuleInput,
   AlertSettings,
+  ApiKeyInfo,
+  AuditEntry,
   DeviceListResponse,
+  DeviceUpdateInfo,
   JobDetail,
   JobSummary,
   SessionInfo,
+  UpdateDispatchInput,
   UserInfo,
   UserRole,
 } from "@openrmm/shared";
@@ -120,4 +125,26 @@ export const api = {
     }),
   deleteUser: (id: number) =>
     request<{ ok: true }>(`/api/users/${id}`, { method: "DELETE" }),
+
+  // Updates
+  updateInfo: () => request<{ devices: DeviceUpdateInfo[] }>("/api/updates/info"),
+  updates: () => request<{ updates: AgentUpdate[] }>("/api/updates"),
+  dispatchUpdate: (input: UpdateDispatchInput) =>
+    request<{ updates: AgentUpdate[] }>("/api/updates", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+
+  // API keys
+  apiKeys: () => request<{ keys: ApiKeyInfo[] }>("/api/api-keys"),
+  createApiKey: (name: string) =>
+    request<ApiKeyInfo>("/api/api-keys", {
+      method: "POST",
+      body: JSON.stringify({ name }),
+    }),
+  deleteApiKey: (id: string) =>
+    request<{ ok: true }>(`/api/api-keys/${id}`, { method: "DELETE" }),
+
+  // Audit
+  audit: (limit = 200) => request<{ entries: AuditEntry[] }>(`/api/audit?limit=${limit}`),
 };

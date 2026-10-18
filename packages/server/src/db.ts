@@ -7,9 +7,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import type {
+  AgentUpdate,
   Alert,
   AlertRule,
   AlertRuleInput,
+  ApiKeyInfo,
+  AuditEntry,
   Device,
   DriveInfo,
   JobDetail,
@@ -17,10 +20,11 @@ import type {
   JobSummary,
   MachineInfo,
   Metrics,
+  UpdateStatus,
   UserInfo,
   UserRole,
 } from "@openrmm/shared";
-import { hashPassword, randomHex, safeEqualHex } from "./crypto.js";
+import { hashPassword, randomHex, safeEqualHex, sha256Hex } from "./crypto.js";
 
 export interface DeviceRow {
   id: string;
@@ -144,6 +148,43 @@ export class Store {
       );
 
       CREATE INDEX IF NOT EXISTS idx_job_results_job ON job_results(job_id);
+
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_at INTEGER NOT NULL,
+        last_used_at INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS agent_updates (
+        id TEXT PRIMARY KEY,
+        device_id TEXT NOT NULL,
+        url TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        status TEXT NOT NULL,
+        from_version TEXT NOT NULL,
+        to_version TEXT,
+        error TEXT,
+        created_at INTEGER NOT NULL,
+        finished_at INTEGER
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_agent_updates_device ON agent_updates(device_id, created_at);
+
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ts INTEGER NOT NULL,
+        user_id INTEGER,
+        username TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target TEXT,
+        ip TEXT,
+        meta TEXT
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
     `);
 
     // users.role was added after the initial schema; backfill on upgrade.
@@ -154,6 +195,17 @@ export class Store {
       this.db.exec(
         "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'",
       );
+    }
+
+    // devices gained OS update info after the initial schema.
+    const deviceCols = this.db.prepare("PRAGMA table_info(devices)").all() as {
+      name: string;
+    }[];
+    if (!deviceCols.some((c) => c.name === "pending_updates")) {
+      this.db.exec("ALTER TABLE devices ADD COLUMN pending_updates INTEGER");
+    }
+    if (!deviceCols.some((c) => c.name === "update_checked_at")) {
+      this.db.exec("ALTER TABLE devices ADD COLUMN update_checked_at INTEGER");
     }
   }
 
@@ -765,6 +817,232 @@ export class Store {
       )
       .all(deviceId) as { job_id: string }[];
   }
+
+  // ---- OS update info ------------------------------------------------------
+
+  setDeviceUpdateInfo(
+    deviceId: string,
+    pendingUpdates: number | null,
+    checkedAt: number,
+  ): void {
+    this.db
+      .prepare(
+        "UPDATE devices SET pending_updates = ?, update_checked_at = ? WHERE id = ?",
+      )
+      .run(pendingUpdates, checkedAt, deviceId);
+  }
+
+  listDeviceUpdateInfo(): {
+    deviceId: string;
+    deviceHostname: string;
+    os: string;
+    osVersion: string;
+    agentVersion: string;
+    pendingUpdates: number | null;
+    updateCheckedAt: number | null;
+    online: boolean;
+  }[] {
+    const rows = this.db
+      .prepare(
+        `SELECT id, hostname, os, os_version, agent_version,
+                pending_updates, update_checked_at, online
+         FROM devices ORDER BY online DESC, hostname ASC`,
+      )
+      .all() as unknown as {
+      id: string;
+      hostname: string;
+      os: string;
+      os_version: string;
+      agent_version: string;
+      pending_updates: number | null;
+      update_checked_at: number | null;
+      online: number;
+    }[];
+    return rows.map((r) => ({
+      deviceId: r.id,
+      deviceHostname: r.hostname,
+      os: r.os,
+      osVersion: r.os_version,
+      agentVersion: r.agent_version,
+      pendingUpdates: r.pending_updates,
+      updateCheckedAt: r.update_checked_at,
+      online: r.online === 1,
+    }));
+  }
+
+  // ---- agent updates ---------------------------------------------------------
+
+  createAgentUpdate(
+    id: string,
+    deviceId: string,
+    url: string,
+    sha256: string,
+    fromVersion: string,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO agent_updates (id, device_id, url, sha256, status, from_version, created_at)
+         VALUES (?, ?, ?, ?, 'pending', ?, ?)`,
+      )
+      .run(id, deviceId, url, sha256, fromVersion, Date.now());
+  }
+
+  getAgentUpdate(id: string): AgentUpdate | null {
+    const row = this.db
+      .prepare(
+        `SELECT u.*, d.hostname AS device_hostname
+         FROM agent_updates u LEFT JOIN devices d ON d.id = u.device_id
+         WHERE u.id = ?`,
+      )
+      .get(id) as unknown as AgentUpdateRow | undefined;
+    return row ? rowToAgentUpdate(row) : null;
+  }
+
+  listAgentUpdates(limit = 100): AgentUpdate[] {
+    const rows = this.db
+      .prepare(
+        `SELECT u.*, d.hostname AS device_hostname
+         FROM agent_updates u LEFT JOIN devices d ON d.id = u.device_id
+         ORDER BY u.created_at DESC LIMIT ?`,
+      )
+      .all(limit) as unknown as AgentUpdateRow[];
+    return rows.map(rowToAgentUpdate);
+  }
+
+  setAgentUpdateStatus(
+    id: string,
+    status: UpdateStatus,
+    error?: string,
+  ): void {
+    const finished = status === "completed" || status === "failed";
+    this.db
+      .prepare(
+        `UPDATE agent_updates SET status = ?, error = ?, finished_at = ?
+         WHERE id = ? AND status NOT IN ('completed', 'failed')`,
+      )
+      .run(status, error ?? null, finished ? Date.now() : null, id);
+  }
+
+  markAgentUpdateCompleted(id: string, toVersion: string): void {
+    this.db
+      .prepare(
+        `UPDATE agent_updates SET status = 'completed', to_version = ?, finished_at = ?
+         WHERE id = ? AND status NOT IN ('completed', 'failed')`,
+      )
+      .run(toVersion, Date.now(), id);
+  }
+
+  /** In-flight update for a device (only one at a time). */
+  findInFlightUpdate(deviceId: string): { id: string } | null {
+    const row = this.db
+      .prepare(
+        `SELECT id FROM agent_updates
+         WHERE device_id = ? AND status IN ('pending', 'downloading', 'verifying', 'restarting')
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+      .get(deviceId) as { id: string } | undefined;
+    return row ?? null;
+  }
+
+  // ---- API keys ----------------------------------------------------------------
+
+  createApiKey(userId: number, name: string, tokenHash: string): ApiKeyInfo {
+    const id = randomUUID();
+    const createdAt = Date.now();
+    this.db
+      .prepare(
+        "INSERT INTO api_keys (id, user_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?)",
+      )
+      .run(id, userId, name, tokenHash, createdAt);
+    return { id, name, createdAt, lastUsedAt: null };
+  }
+
+  listApiKeys(userId: number): ApiKeyInfo[] {
+    const rows = this.db
+      .prepare(
+        "SELECT id, name, created_at, last_used_at FROM api_keys WHERE user_id = ? ORDER BY created_at DESC",
+      )
+      .all(userId) as unknown as {
+      id: string;
+      name: string;
+      created_at: number;
+      last_used_at: number | null;
+    }[];
+    return rows.map((r) => ({
+      id: r.id,
+      name: r.name,
+      createdAt: r.created_at,
+      lastUsedAt: r.last_used_at,
+    }));
+  }
+
+  deleteApiKey(userId: number, keyId: string): boolean {
+    const res = this.db
+      .prepare("DELETE FROM api_keys WHERE id = ? AND user_id = ?")
+      .run(keyId, userId);
+    return res.changes > 0;
+  }
+
+  /** Resolve an API key token to its owner, updating last_used_at. */
+  findUserByApiToken(tokenHash: string): { id: number; username: string; role: string } | null {
+    const row = this.db
+      .prepare(
+        `SELECT u.id, u.username, u.role FROM api_keys k
+         JOIN users u ON u.id = k.user_id
+         WHERE k.token_hash = ?`,
+      )
+      .get(tokenHash) as { id: number; username: string; role: string } | undefined;
+    if (!row) return null;
+    this.db
+      .prepare("UPDATE api_keys SET last_used_at = ? WHERE token_hash = ?")
+      .run(Date.now(), tokenHash);
+    return row;
+  }
+
+  // ---- audit log ------------------------------------------------------------------
+
+  addAuditEntry(
+    entry: Omit<AuditEntry, "id" | "ts"> & { userId?: number | null },
+  ): void {
+    this.db
+      .prepare(
+        "INSERT INTO audit_log (ts, user_id, username, action, target, ip, meta) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        Date.now(),
+        entry.userId ?? null,
+        entry.username,
+        entry.action,
+        entry.target,
+        entry.ip,
+        entry.meta,
+      );
+  }
+
+  listAuditEntries(limit = 200): AuditEntry[] {
+    const rows = this.db
+      .prepare(
+        "SELECT * FROM audit_log ORDER BY ts DESC, id DESC LIMIT ?",
+      )
+      .all(limit) as unknown as {
+      id: number;
+      ts: number;
+      username: string;
+      action: string;
+      target: string | null;
+      ip: string | null;
+      meta: string | null;
+    }[];
+    return rows.map((r) => ({
+      id: r.id,
+      ts: r.ts,
+      username: r.username,
+      action: r.action,
+      target: r.target,
+      ip: r.ip,
+      meta: r.meta,
+    }));
+  }
 }
 
 function rowToDevice(row: DeviceRow): Device {
@@ -846,6 +1124,36 @@ interface JobResultRow {
   stderr: string;
   started_at: number | null;
   finished_at: number | null;
+}
+
+interface AgentUpdateRow {
+  id: string;
+  device_id: string;
+  device_hostname: string | null;
+  url: string;
+  sha256: string;
+  status: string;
+  from_version: string;
+  to_version: string | null;
+  error: string | null;
+  created_at: number;
+  finished_at: number | null;
+}
+
+function rowToAgentUpdate(row: AgentUpdateRow): AgentUpdate {
+  return {
+    id: row.id,
+    deviceId: row.device_id,
+    deviceHostname: row.device_hostname ?? row.device_id,
+    url: row.url,
+    sha256: row.sha256,
+    status: row.status as UpdateStatus,
+    fromVersion: row.from_version,
+    toVersion: row.to_version,
+    error: row.error,
+    createdAt: row.created_at,
+    finishedAt: row.finished_at,
+  };
 }
 
 function rowToJobSummary(row: JobRow): JobSummary {

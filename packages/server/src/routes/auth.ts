@@ -8,6 +8,7 @@ import type { SessionInfo } from "@openrmm/shared";
 import type { Store } from "../db.js";
 import { verifyPassword } from "../crypto.js";
 import { clearSessionCookie, setSessionCookie, signSession } from "../session.js";
+import { audit } from "../audit.js";
 
 interface LoginBody {
   username?: string;
@@ -23,15 +24,18 @@ export function registerAuthRoutes(app: FastifyInstance, store: Store, secret: s
 
     const user = store.findUserByUsername(username);
     if (!user || !verifyPassword(password, user.password_hash)) {
+      audit(store, req, "auth.login_failed", username);
       return reply.code(401).send({ error: "invalid credentials" });
     }
 
     const { cookie } = signSession(secret, user.id);
     setSessionCookie(reply, cookie);
+    audit(store, req, "auth.login", username);
     return reply.send({ userId: user.id, username, role: user.role });
   });
 
-  app.post("/api/auth/logout", async (_req, reply) => {
+  app.post("/api/auth/logout", async (req, reply) => {
+    audit(store, req, "auth.logout");
     clearSessionCookie(reply);
     return reply.send({ ok: true });
   });

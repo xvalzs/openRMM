@@ -12,6 +12,7 @@ import type {
 } from "@openrmm/shared";
 import type { Store } from "../db.js";
 import { requireAdmin, requireSession } from "./auth.js";
+import { audit } from "../audit.js";
 
 const METRICS: AlertMetric[] = ["cpu_usage", "mem_pct", "disk_pct"];
 const OPERATORS: AlertOperator[] = [">", ">=", "<", "<="];
@@ -56,7 +57,9 @@ export function registerAlertRoutes(app: FastifyInstance, store: Store): void {
   app.post("/api/alert-rules", { preHandler: requireSession }, async (req, reply) => {
     const parsed = parseRuleBody(req.body);
     if ("error" in parsed) return reply.code(400).send({ error: parsed.error });
-    return reply.code(201).send(store.createAlertRule(parsed));
+    const rule = store.createAlertRule(parsed);
+    audit(store, req, "alert-rule.created", rule.name);
+    return reply.code(201).send(rule);
   });
 
   app.put("/api/alert-rules/:id", { preHandler: requireSession }, async (req, reply) => {
@@ -83,6 +86,7 @@ export function registerAlertRoutes(app: FastifyInstance, store: Store): void {
     if (body.deviceId !== undefined) patch.deviceId = parsed.deviceId;
     const updated = store.updateAlertRule(id, patch);
     if (!updated) return reply.code(404).send({ error: "rule not found" });
+    audit(store, req, "alert-rule.updated", updated.name);
     return reply.send(updated);
   });
 
@@ -91,6 +95,7 @@ export function registerAlertRoutes(app: FastifyInstance, store: Store): void {
     if (!store.deleteAlertRule(id)) {
       return reply.code(404).send({ error: "rule not found" });
     }
+    audit(store, req, "alert-rule.deleted", id);
     return reply.send({ ok: true });
   });
 
@@ -122,6 +127,7 @@ export function registerAlertRoutes(app: FastifyInstance, store: Store): void {
       return reply.code(400).send({ error: "webhookUrl must start with http:// or https://" });
     }
     store.setSetting("alert_webhook_url", url);
+    audit(store, req, "alert-settings.updated", "webhookUrl", { url });
     const body: AlertSettings = { webhookUrl: url };
     return reply.send(body);
   });

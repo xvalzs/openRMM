@@ -70,7 +70,9 @@ export type AgentMessage =
   | { type: "shell_data"; sessionId: string; data: string }
   | { type: "shell_exit"; sessionId: string; code: number | null }
   | { type: "job_output"; jobId: string; stream: "stdout" | "stderr"; data: string }
-  | { type: "job_done"; jobId: string; exitCode: number | null; timedOut?: boolean };
+  | { type: "job_done"; jobId: string; exitCode: number | null; timedOut?: boolean }
+  | { type: "update_info"; pendingUpdates: number | null; checkedAt: number }
+  | { type: "update_status"; updateId: string; status: UpdateStatus; error?: string };
 
 /** Messages sent by the server over the WebSocket. */
 export type ServerMessage =
@@ -80,7 +82,8 @@ export type ServerMessage =
   | { type: "shell_input"; sessionId: string; data: string }
   | { type: "shell_end"; sessionId: string }
   | { type: "job_run"; jobId: string; script: string; timeoutSec: number }
-  | { type: "job_cancel"; jobId: string };
+  | { type: "job_cancel"; jobId: string }
+  | { type: "update_run"; updateId: string; url: string; sha256: string };
 
 /** Browser → server messages on a shell channel WebSocket. */
 export type ShellClientMessage =
@@ -256,4 +259,68 @@ export interface AlertListResponse {
 
 export interface AlertSettings {
   webhookUrl: string;
+}
+
+// ---- Updates --------------------------------------------------------------------
+
+export type UpdateStatus =
+  | "pending"
+  | "downloading"
+  | "verifying"
+  | "restarting"
+  | "completed"
+  | "failed";
+
+export interface AgentUpdate {
+  id: string;
+  deviceId: string;
+  deviceHostname: string;
+  url: string;
+  sha256: string;
+  status: UpdateStatus;
+  fromVersion: string;
+  toVersion: string | null;
+  error: string | null;
+  createdAt: number;
+  finishedAt: number | null;
+}
+
+export interface DeviceUpdateInfo {
+  deviceId: string;
+  deviceHostname: string;
+  os: string;
+  osVersion: string;
+  agentVersion: string;
+  pendingUpdates: number | null;
+  updateCheckedAt: number | null;
+  online: boolean;
+}
+
+export interface UpdateDispatchInput {
+  url: string;
+  sha256: string;
+  deviceIds?: string[] | null;
+}
+
+// ---- API keys ---------------------------------------------------------------------
+
+export interface ApiKeyInfo {
+  id: string;
+  name: string;
+  /** Shown only once, when the key is created. */
+  token?: string;
+  createdAt: number;
+  lastUsedAt: number | null;
+}
+
+// ---- Audit log ---------------------------------------------------------------------
+
+export interface AuditEntry {
+  id: number;
+  ts: number;
+  username: string;
+  action: string;
+  target: string | null;
+  ip: string | null;
+  meta: string | null;
 }

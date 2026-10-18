@@ -35,13 +35,16 @@ WebSocket channel, and you watch everything from a web dashboard.
 - **Job dispatch**: run a script on many devices at once (or a selection), with per-device results, streaming output, timeouts, and cancellation
 - **Alert rules**: threshold rules on CPU/memory/disk per device or fleet-wide, with a minimum-duration window, active → resolved lifecycle, and webhooks on state transitions
 - **Multi-user permissions**: admin and operator roles. Operators monitor, manage alerts, and run jobs; shells, user management, and webhook settings are admin-only
+- **Update management**: devices report OS pending-update counts (Windows Update COM / `softwareupdate`); admins deploy new agent bundles (URL + SHA-256) that self-verify, self-replace, and restart in place
+- **API keys**: per-user Bearer tokens for scripting, inheriting the user's role, revocable at any time
+- **Audit log**: every security-relevant action (logins, user/rule/job/key changes, shells, updates) is recorded with user, target, and IP
 - **Native service installation**: `service install` registers the agent as a Windows service (WinSW, auto-restart on failure) or a macOS LaunchAgent (KeepAlive)
 - TLS support via `RMM_TLS_CERT` / `RMM_TLS_KEY` (or any reverse proxy)
 
 ### Roadmap
 
-Linux agent builds, patch/update management, per-user API keys,
-audit logging.
+OS patch installation (deploying the updates, not just counting them), Linux
+agent builds, SSO/OIDC, remote desktop.
 
 ## Requirements
 
@@ -164,6 +167,39 @@ The **Users** page (admins only) manages accounts. Roles:
 
 The user seeded on first boot is always an admin, and the server refuses to
 delete or demote the last admin.
+
+## Update management
+
+The **Updates** page lists every device's OS version, agent version, and
+pending OS updates. Agents check Windows Update (via COM, no admin needed)
+or `softwareupdate -l` at most once per six hours; first results can take
+up to ~90 s to appear.
+
+Admins can deploy a new **agent bundle**: build it with
+`npm run package:agent`, host the `openrmm-agent.js` somewhere reachable by
+the endpoints, and provide its SHA-256 (`certutil -hashfile openrmm-agent.js SHA256`).
+Each targeted agent downloads it, verifies the digest, atomically replaces
+itself, and restarts — service-managed agents restart via the service
+manager, foreground agents respawn themselves. Progress and history are
+tracked per device on the Updates page.
+
+## API keys
+
+Every user can mint personal keys on the **API Keys** page. A key is shown
+once and carries the same role as its owner:
+
+```bash
+curl -H "Authorization: Bearer $OPENRMM_KEY" https://your-server/api/devices
+```
+
+Revoking a key invalidates it immediately.
+
+## Audit log
+
+Admins can review the **Audit** page: logins (success and failure), user
+management, alert rule changes, job dispatch/cancellation, shell sessions,
+agent update deployments, API key creation/revocation, and webhook changes —
+each with the acting user, target, IP, and timestamp.
 
 ## Running agents as services
 

@@ -11,7 +11,7 @@ import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
 import { OFFLINE_AFTER_MS, PROTOCOL_VERSION, type UserRole } from "@openrmm/shared";
 import { loadConfig } from "./config.js";
-import { randomHex } from "./crypto.js";
+import { randomHex, sha256Hex } from "./crypto.js";
 import { Store } from "./db.js";
 import { getSessionCookie, verifySession, type Session } from "./session.js";
 import { registerAgentRoutes, createSocketRegistry } from "./routes/agent.js";
@@ -20,9 +20,13 @@ import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerAlertRoutes } from "./routes/alerts.js";
 import { registerJobRoutes } from "./routes/jobs.js";
 import { registerUserRoutes } from "./routes/users.js";
+import { registerUpdateRoutes } from "./routes/updates.js";
+import { registerApiKeyRoutes } from "./routes/keys.js";
+import { registerAuditRoutes } from "./routes/audit.js";
 import { ShellHub, registerShellRoutes } from "./shell.js";
 import { AlertService } from "./alerts.js";
 import { JobsService } from "./jobs.js";
+import { UpdatesService } from "./updates.js";
 
 const VERSION = "0.1.0";
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -55,6 +59,7 @@ async function main(): Promise<void> {
   const shellHub = new ShellHub();
   const alertService = new AlertService(store);
   const jobsService = new JobsService(store, sockets);
+  const updatesService = new UpdatesService(store, sockets);
 
   const app = Fastify({
     logger: { level: process.env.RMM_LOG_LEVEL ?? "info" },
@@ -68,6 +73,17 @@ async function main(): Promise<void> {
   // ---- Session resolution on every request ----------------------------
   app.decorateRequest("session", null);
   app.addHook("onRequest", async (req) => {
+    // Bearer token (API key) takes precedence over the session cookie.
+    const authHeader = req.headers.authorization;
+    if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.slice(7).trim();
+      const user = token ? store.findUserByApiToken(sha256Hex(token)) : null;
+      req.session = user
+        ? ({ userId: user.id, username: user.username, role: user.role as UserRole } satisfies Session)
+        : null;
+      return;
+    }
+
     const userId = verifySession(sessionSecret, getSessionCookie(req));
     if (!userId) {
       req.session = null;
@@ -88,12 +104,15 @@ async function main(): Promise<void> {
     protocolVersion: PROTOCOL_VERSION,
   }));
 
-  registerAgentRoutes(app, store, sockets, shellHub, alertService, jobsService);
+  registerAgentRoutes(app, store, sockets, shellHub, alertService, jobsService, updatesService);
   registerAuthRoutes(app, store, sessionSecret);
   registerDeviceRoutes(app, store);
   registerAlertRoutes(app, store);
   registerJobRoutes(app, store, jobsService);
   registerUserRoutes(app, store);
+  registerUpdateRoutes(app, store, updatesService);
+  registerApiKeyRoutes(app, store);
+  registerAuditRoutes(app, store);
   registerShellRoutes(app, store, sockets, shellHub);
 
   // ---- Serve the built dashboard (if present) --------------------------

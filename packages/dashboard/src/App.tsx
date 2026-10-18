@@ -5,7 +5,10 @@ import Login from "./Login.js";
 import Devices from "./Devices.js";
 import Alerts from "./Alerts.js";
 import Jobs from "./Jobs.js";
+import Updates from "./Updates.js";
+import Keys from "./Keys.js";
 import Users from "./Users.js";
+import Audit from "./Audit.js";
 import Topbar, { type View } from "./Topbar.js";
 
 export default function App(): React.JSX.Element {
@@ -60,8 +63,14 @@ export default function App(): React.JSX.Element {
       <Alerts isAdmin={isAdmin} />
     ) : view === "jobs" ? (
       <Jobs />
+    ) : view === "updates" ? (
+      <Updates isAdmin={isAdmin} />
+    ) : view === "keys" ? (
+      <Keys />
     ) : view === "users" && isAdmin ? (
       <Users session={session} />
+    ) : view === "audit" && isAdmin ? (
+      <Audit />
     ) : (
       <Devices isAdmin={isAdmin} />
     );

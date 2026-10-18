@@ -13,6 +13,8 @@ import type { AgentConfig } from "./config.js";
 import { collectMachineInfo, collectMetrics } from "./inventory.js";
 import { createShellManager } from "./shells.js";
 import { createJobManager } from "./jobs.js";
+import { createUpdateManager } from "./updates.js";
+import { collectPendingUpdates } from "./pending.js";
 
 export interface AgentClient {
   /** Runs until the process is killed. Never resolves. */
@@ -35,6 +37,24 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
   let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
   const shells = createShellManager(send);
   const jobs = createJobManager(send);
+  const updates = createUpdateManager(send, log);
+  let lastUpdateCheck = 0;
+  let updateCheckRunning = false;
+
+  /** Report OS pending-update counts, at most once per 6 hours. */
+  async function checkPendingUpdates(): Promise<void> {
+    if (updateCheckRunning || Date.now() - lastUpdateCheck < 6 * 60 * 60 * 1000) return;
+    updateCheckRunning = true;
+    try {
+      const pending = await collectPendingUpdates();
+      lastUpdateCheck = Date.now();
+      send({ type: "update_info", pendingUpdates: pending, checkedAt: lastUpdateCheck });
+    } catch {
+      // Best-effort metric; never break the connection loop.
+    } finally {
+      updateCheckRunning = false;
+    }
+  }
 
   async function register(): Promise<RegisterResponse> {
     const res = await fetch(`${config.serverUrl}/api/agent/register`, {
@@ -98,6 +118,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
       ws.onopen = () => {
         opened = true;
         send({ type: "hello", protocolVersion: PROTOCOL_VERSION });
+        void checkPendingUpdates();
         backoff = BACKOFF_BASE_MS;
         log(`connected to ${config.serverUrl}`);
         // Prime the CPU sampler so the first heartbeat has real numbers.
@@ -128,6 +149,8 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
           shells.handle(msg);
         } else if (msg.type === "job_run" || msg.type === "job_cancel") {
           jobs.handle(msg);
+        } else if (msg.type === "update_run") {
+          updates.handle(msg);
         }
       };
 

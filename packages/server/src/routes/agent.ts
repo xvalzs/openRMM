@@ -18,6 +18,7 @@ import { randomHex, sha256Hex } from "../crypto.js";
 import type { AlertService } from "../alerts.js";
 import type { ShellHub } from "../shell.js";
 import type { JobsService } from "../jobs.js";
+import type { UpdatesService } from "../updates.js";
 
 export interface AgentSockets {
   /** deviceId -> live socket (only the newest registration wins). */
@@ -56,6 +57,7 @@ export function registerAgentRoutes(
   hub: ShellHub,
   alerts: AlertService,
   jobs: JobsService,
+  updates: UpdatesService,
 ): void {
   // ---- Registration ---------------------------------------------------
 
@@ -92,6 +94,7 @@ export function registerAgentRoutes(
     const token = randomHex(32);
     const ip = req.ip;
     store.registerDevice(body.clientId, body.machine, sha256Hex(token), ip, Date.now());
+    updates.onDeviceReconnect(body.clientId, body.machine.agentVersion);
 
     const response: RegisterResponse = {
       deviceId: body.clientId,
@@ -156,6 +159,12 @@ export function registerAgentRoutes(
           break;
         case "job_done":
           jobs.onDoneForDevice(msg.jobId, deviceId, msg.exitCode, msg.timedOut === true);
+          break;
+        case "update_info":
+          updates.handleUpdateInfo(deviceId, msg.pendingUpdates, msg.checkedAt);
+          break;
+        case "update_status":
+          updates.handleUpdateStatus(deviceId, msg.updateId, msg.status, msg.error);
           break;
         default:
           send(socket, { type: "error", message: `unknown message type: ${String((msg as { type?: string }).type)}` });
