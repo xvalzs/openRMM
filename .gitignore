@@ -4,6 +4,7 @@ node_modules/
 # Build output
 dist/
 packages/*/dist/
+packages/agent/release/
 
 # Runtime data (SQLite database, agent config, secrets)
 data/

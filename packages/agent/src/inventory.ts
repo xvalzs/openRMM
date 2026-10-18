@@ -11,7 +11,16 @@ import type { DriveInfo, MachineInfo, Metrics } from "@openrmm/shared";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
+declare global {
+  // Injected at bundle time (see scripts/package.mjs) so the packaged
+  // single-file build reports its version without a package.json nearby.
+  var __OPENRMM_AGENT_VERSION__: string | undefined;
+}
+
 export function agentVersion(): string {
+  if (typeof globalThis.__OPENRMM_AGENT_VERSION__ === "string") {
+    return globalThis.__OPENRMM_AGENT_VERSION__;
+  }
   try {
     const pkg = JSON.parse(
       fs.readFileSync(path.join(here, "..", "package.json"), "utf8"),

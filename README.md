@@ -73,6 +73,25 @@ npm run dev            # starts `dev:server` (tsc watch) and `dev:dashboard` (Vi
 
 Vite proxies `/api` and `/ws` to `http://localhost:8787`.
 
+## Packaging the agent
+
+Build a distributable agent package — a zip with a single bundled JS file
+(no `node_modules` on the target; endpoints only need Node.js ≥ 24):
+
+```bash
+npm run package:agent
+# → packages/agent/release/openrmm-agent-v<version>.zip
+```
+
+Inside the zip: `openrmm-agent.js` (self-contained bundle), `openrmm-agent.cmd`
+and `openrmm-agent` launchers for Windows and macOS/Linux, a README, and the
+license. On the endpoint:
+
+```bash
+openrmm-agent.cmd install --server https://your-server --key <install-key>
+openrmm-agent.cmd run
+```
+
 ## Configuration
 
 All server settings are environment variables:

@@ -8,13 +8,15 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsc -p tsconfig.json --watch --preserveWatchOutput",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "package": "node scripts/package.mjs"
   },
   "dependencies": {
     "@openrmm/shared": "0.1.0"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.9.0"
   }
 }
