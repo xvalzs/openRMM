@@ -17,6 +17,7 @@ import type { Store } from "../db.js";
 import { randomHex, sha256Hex } from "../crypto.js";
 import type { AlertService } from "../alerts.js";
 import type { ShellHub } from "../shell.js";
+import type { JobsService } from "../jobs.js";
 
 export interface AgentSockets {
   /** deviceId -> live socket (only the newest registration wins). */
@@ -54,6 +55,7 @@ export function registerAgentRoutes(
   sockets: AgentSockets,
   hub: ShellHub,
   alerts: AlertService,
+  jobs: JobsService,
 ): void {
   // ---- Registration ---------------------------------------------------
 
@@ -149,6 +151,12 @@ export function registerAgentRoutes(
         case "shell_exit":
           hub.handleAgentMessage(msg);
           break;
+        case "job_output":
+          jobs.onOutputForDevice(msg.jobId, deviceId, msg.stream, msg.data);
+          break;
+        case "job_done":
+          jobs.onDoneForDevice(msg.jobId, deviceId, msg.exitCode, msg.timedOut === true);
+          break;
         default:
           send(socket, { type: "error", message: `unknown message type: ${String((msg as { type?: string }).type)}` });
       }
@@ -161,6 +169,7 @@ export function registerAgentRoutes(
       // briefly overlaps the old socket's close event).
       if (!sockets.get(deviceId)) {
         store.setDeviceOnline(deviceId, false);
+        jobs.onDeviceDisconnected(deviceId);
         app.log.info({ deviceId }, "agent disconnected");
       }
     });

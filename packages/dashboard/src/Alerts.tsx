@@ -11,6 +11,10 @@ const METRICS: { value: AlertMetric; label: string }[] = [
 
 const OPERATORS: AlertOperator[] = [">", ">=", "<", "<="];
 
+interface AlertsProps {
+  isAdmin: boolean;
+}
+
 interface RuleForm {
   name: string;
   deviceId: string;
@@ -29,7 +33,7 @@ const EMPTY_FORM: RuleForm = {
   durationSec: "60",
 };
 
-export default function Alerts(): React.JSX.Element {
+export default function Alerts({ isAdmin }: AlertsProps): React.JSX.Element {
   const [rules, setRules] = useState<AlertRule[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [alerts, setAlerts] = useState<Alert[]>([]);
@@ -272,21 +276,24 @@ export default function Alerts(): React.JSX.Element {
         )}
       </section>
 
-      <section className="panel">
-        <h2 className="panel-title">Webhook</h2>
-        <p className="dim">
-          Receive POSTs on alert transitions: <code>{"{ event: 'alert.fired' | 'alert.resolved', alert }"}</code>
-        </p>
-        <div className="webhook-row">
-          <input
-            placeholder="https://example.com/hooks/rmm"
-            value={webhookUrl}
-            onChange={(e) => setWebhookUrl(e.target.value)}
-          />
-          <button onClick={() => void saveWebhook()}>Save</button>
-          {webhookNote && <span className="dim">{webhookNote}</span>}
-        </div>
-      </section>
+      {isAdmin && (
+        <section className="panel">
+          <h2 className="panel-title">Webhook</h2>
+          <p className="dim">
+            Receive POSTs on alert transitions:{" "}
+            <code>{"{ event: 'alert.fired' | 'alert.resolved', alert }"}</code>
+          </p>
+          <div className="webhook-row">
+            <input
+              placeholder="https://example.com/hooks/rmm"
+              value={webhookUrl}
+              onChange={(e) => setWebhookUrl(e.target.value)}
+            />
+            <button onClick={() => void saveWebhook()}>Save</button>
+            {webhookNote && <span className="dim">{webhookNote}</span>}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

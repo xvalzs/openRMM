@@ -11,7 +11,7 @@ import type {
   AlertSettings,
 } from "@openrmm/shared";
 import type { Store } from "../db.js";
-import { requireSession } from "./auth.js";
+import { requireAdmin, requireSession } from "./auth.js";
 
 const METRICS: AlertMetric[] = ["cpu_usage", "mem_pct", "disk_pct"];
 const OPERATORS: AlertOperator[] = [">", ">=", "<", "<="];
@@ -112,7 +112,7 @@ export function registerAlertRoutes(app: FastifyInstance, store: Store): void {
     return body;
   });
 
-  app.put("/api/alert-settings", { preHandler: requireSession }, async (req, reply) => {
+  app.put("/api/alert-settings", { preHandler: requireAdmin }, async (req, reply) => {
     const { webhookUrl } = (req.body ?? {}) as { webhookUrl?: unknown };
     if (webhookUrl !== undefined && typeof webhookUrl !== "string") {
       return reply.code(400).send({ error: "webhookUrl must be a string" });

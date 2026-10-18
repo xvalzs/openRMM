@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import type { FastifyReply, FastifyRequest } from "fastify";
+import type { UserRole } from "@openrmm/shared";
 import { hmacHex, safeEqualHex } from "./crypto.js";
 
 export const SESSION_COOKIE = "rmm_session";
@@ -13,6 +14,7 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 export interface Session {
   userId: number;
   username: string;
+  role: UserRole;
 }
 
 declare module "fastify" {

@@ -12,6 +12,7 @@ import {
 import type { AgentConfig } from "./config.js";
 import { collectMachineInfo, collectMetrics } from "./inventory.js";
 import { createShellManager } from "./shells.js";
+import { createJobManager } from "./jobs.js";
 
 export interface AgentClient {
   /** Runs until the process is killed. Never resolves. */
@@ -33,6 +34,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
   const shells = createShellManager(send);
+  const jobs = createJobManager(send);
 
   async function register(): Promise<RegisterResponse> {
     const res = await fetch(`${config.serverUrl}/api/agent/register`, {
@@ -124,6 +126,8 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
           msg.type === "shell_end"
         ) {
           shells.handle(msg);
+        } else if (msg.type === "job_run" || msg.type === "job_cancel") {
+          jobs.handle(msg);
         }
       };
 
@@ -134,6 +138,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
       ws.onclose = (event) => {
         clearTimers();
         shells.closeAll();
+        jobs.closeAll();
         if (socket === ws) socket = null;
         if (opened) {
           log(`disconnected (code ${event.code}${event.reason ? `, ${event.reason}` : ""})`);
@@ -170,6 +175,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
       stopped = true;
       clearTimers();
       shells.closeAll();
+      jobs.closeAll();
       socket?.close();
     },
   };

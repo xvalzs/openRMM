@@ -7,6 +7,10 @@ import ShellPanel from "./ShellPanel.js";
 
 const POLL_MS = 5_000;
 
+interface DevicesProps {
+  isAdmin: boolean;
+}
+
 function UsageBar({ value, warnAt = 80 }: { value: number; warnAt?: number }): React.JSX.Element {
   const level = value >= warnAt ? "high" : value >= warnAt * 0.75 ? "mid" : "low";
   return (
@@ -28,7 +32,7 @@ function primaryDrive(device: Device): { mount: string; usedPct: number } | null
   };
 }
 
-export default function Devices(): React.JSX.Element {
+export default function Devices({ isAdmin }: DevicesProps): React.JSX.Element {
   const [data, setData] = useState<DeviceListResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -159,7 +163,7 @@ export default function Devices(): React.JSX.Element {
           <DeviceDetail
             device={selected}
             onClose={() => setSelectedId(null)}
-            onOpenShell={() => setShellDevice(selected)}
+            onOpenShell={isAdmin ? () => setShellDevice(selected) : undefined}
           />
         )}
       </main>

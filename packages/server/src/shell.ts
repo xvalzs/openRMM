@@ -9,7 +9,7 @@ import type { FastifyInstance } from "fastify";
 import type { WebSocket } from "ws";
 import type { AgentMessage, ServerMessage, ShellClientMessage, ShellServerMessage } from "@openrmm/shared";
 import type { Store } from "./db.js";
-import { requireSession } from "./routes/auth.js";
+import { requireAdmin, requireSession } from "./routes/auth.js";
 import type { AgentSockets } from "./routes/agent.js";
 
 interface ShellSession {
@@ -125,9 +125,9 @@ export function registerShellRoutes(
   sockets: AgentSockets,
   hub: ShellHub,
 ): void {
-  // ---- Create a shell session on an online device --------------------------
+  // ---- Create a shell session on an online device (admin only) -------------
 
-  app.post("/api/devices/:id/shell", { preHandler: requireSession }, async (req, reply) => {
+  app.post("/api/devices/:id/shell", { preHandler: requireAdmin }, async (req, reply) => {
     const { id } = req.params as { id: string };
     const device = store.getDevice(id);
     if (!device) return reply.code(404).send({ error: "device not found" });
@@ -151,7 +151,7 @@ export function registerShellRoutes(
 
   // ---- End a shell session ---------------------------------------------------
 
-  app.delete("/api/shells/:sessionId", { preHandler: requireSession }, async (req, reply) => {
+  app.delete("/api/shells/:sessionId", { preHandler: requireAdmin }, async (req, reply) => {
     const { sessionId } = req.params as { sessionId: string };
     const ended = hub.end(sessionId, sockets);
     if (!ended) return reply.code(404).send({ error: "session not found" });
@@ -163,6 +163,11 @@ export function registerShellRoutes(
   app.get("/ws/shell", { websocket: true }, (socket: WebSocket, req) => {
     if (!req.session) {
       sendBrowser(socket, { type: "error", message: "not authenticated" });
+      socket.close();
+      return;
+    }
+    if (req.session.role !== "admin") {
+      sendBrowser(socket, { type: "error", message: "admin role required" });
       socket.close();
       return;
     }

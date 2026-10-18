@@ -28,7 +28,7 @@ export function registerAuthRoutes(app: FastifyInstance, store: Store, secret: s
 
     const { cookie } = signSession(secret, user.id);
     setSessionCookie(reply, cookie);
-    return reply.send({ username });
+    return reply.send({ userId: user.id, username, role: user.role });
   });
 
   app.post("/api/auth/logout", async (_req, reply) => {
@@ -38,7 +38,11 @@ export function registerAuthRoutes(app: FastifyInstance, store: Store, secret: s
 
   app.get("/api/auth/me", async (req, reply) => {
     if (!req.session) return reply.code(401).send({ error: "not authenticated" });
-    const body: SessionInfo = { username: req.session.username };
+    const body: SessionInfo = {
+      userId: req.session.userId,
+      username: req.session.username,
+      role: req.session.role,
+    };
     return reply.send(body);
   });
 }
@@ -47,5 +51,14 @@ export function registerAuthRoutes(app: FastifyInstance, store: Store, secret: s
 export async function requireSession(req: FastifyRequest, reply: FastifyReply): Promise<void> {
   if (!req.session) {
     await reply.code(401).send({ error: "not authenticated" });
+  }
+}
+
+/** Reject requests from non-admin sessions. Use as a route preHandler. */
+export async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Promise<void> {
+  await requireSession(req, reply);
+  if (reply.sent) return;
+  if (req.session!.role !== "admin") {
+    await reply.code(403).send({ error: "admin role required" });
   }
 }

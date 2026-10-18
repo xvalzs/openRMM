@@ -32,14 +32,16 @@ WebSocket channel, and you watch everything from a web dashboard.
 - Dashboard with sign-in (scrypt-hashed passwords, HMAC-signed session cookies), device list, resource usage bars, detail pane
 - Reconnection with exponential backoff, watchdog, and re-registration on every connect
 - **Remote shell**: interactive PowerShell (Windows) / bash (macOS) sessions from the dashboard, streamed over the agent's WebSocket channel (xterm.js terminal)
+- **Job dispatch**: run a script on many devices at once (or a selection), with per-device results, streaming output, timeouts, and cancellation
 - **Alert rules**: threshold rules on CPU/memory/disk per device or fleet-wide, with a minimum-duration window, active → resolved lifecycle, and webhooks on state transitions
+- **Multi-user permissions**: admin and operator roles. Operators monitor, manage alerts, and run jobs; shells, user management, and webhook settings are admin-only
 - **Native service installation**: `service install` registers the agent as a Windows service (WinSW, auto-restart on failure) or a macOS LaunchAgent (KeepAlive)
 - TLS support via `RMM_TLS_CERT` / `RMM_TLS_KEY` (or any reverse proxy)
 
 ### Roadmap
 
-Command/job dispatch (batch scripts to many devices), Linux agent builds,
-multi-user permissions, patch/update management.
+Linux agent builds, patch/update management, per-user API keys,
+audit logging.
 
 ## Requirements
 
@@ -140,6 +142,28 @@ moves to *resolved*. Both transitions POST to the configured webhook as
 { "event": "alert.fired", "alert": { ... } }
 { "event": "alert.resolved", "alert": { ... } }
 ```
+
+## Job dispatch
+
+On the **Jobs** page, create a job with a script and a target: every online
+device or a hand-picked selection. Each agent runs it with its platform
+shell (PowerShell on Windows, bash on macOS/Linux) and streams stdout/stderr
+back to the job detail. Jobs have per-device statuses (success, failed,
+timeout, skipped, cancelled), a configurable timeout that kills runaway
+scripts, and can be cancelled while running. Output is capped per stream to
+keep the database small.
+
+## Users & roles
+
+The **Users** page (admins only) manages accounts. Roles:
+
+| Role       | Devices | Alerts | Jobs | Shells | Users | Webhook settings |
+| ---------- | ------- | ------ | ---- | ------ | ----- | ---------------- |
+| admin      | ✅      | ✅     | ✅   | ✅     | ✅    | ✅               |
+| operator   | ✅      | ✅     | ✅   | ❌     | ❌    | ❌               |
+
+The user seeded on first boot is always an admin, and the server refuses to
+delete or demote the last admin.
 
 ## Running agents as services
 

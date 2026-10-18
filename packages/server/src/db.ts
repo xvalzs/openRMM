@@ -12,8 +12,13 @@ import type {
   AlertRuleInput,
   Device,
   DriveInfo,
+  JobDetail,
+  JobResult,
+  JobSummary,
   MachineInfo,
   Metrics,
+  UserInfo,
+  UserRole,
 } from "@openrmm/shared";
 import { hashPassword, randomHex, safeEqualHex } from "./crypto.js";
 
@@ -114,7 +119,42 @@ export class Store {
 
       CREATE INDEX IF NOT EXISTS idx_alerts_state ON alerts(state);
       CREATE INDEX IF NOT EXISTS idx_alerts_rule_device ON alerts(rule_id, device_id, state);
+
+      CREATE TABLE IF NOT EXISTS jobs (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        script TEXT NOT NULL,
+        timeout_sec INTEGER NOT NULL,
+        status TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        finished_at INTEGER
+      );
+
+      CREATE TABLE IF NOT EXISTS job_results (
+        job_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        exit_code INTEGER,
+        stdout TEXT NOT NULL DEFAULT '',
+        stderr TEXT NOT NULL DEFAULT '',
+        started_at INTEGER,
+        finished_at INTEGER,
+        PRIMARY KEY (job_id, device_id)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_job_results_job ON job_results(job_id);
     `);
+
+    // users.role was added after the initial schema; backfill on upgrade.
+    const userCols = this.db.prepare("PRAGMA table_info(users)").all() as {
+      name: string;
+    }[];
+    if (!userCols.some((c) => c.name === "role")) {
+      this.db.exec(
+        "ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'",
+      );
+    }
   }
 
   // ---- settings -------------------------------------------------------
@@ -159,17 +199,91 @@ export class Store {
     if (existing) return false;
     this.db
       .prepare(
-        "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
+        "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, 'admin', ?)",
       )
       .run(username, hashPassword(password), Date.now());
     return true;
   }
 
-  findUserByUsername(username: string): { id: number; password_hash: string } | null {
+  findUserByUsername(username: string): {
+    id: number;
+    password_hash: string;
+    role: string;
+  } | null {
     const row = this.db
-      .prepare("SELECT id, password_hash FROM users WHERE username = ?")
-      .get(username) as { id: number; password_hash: string } | undefined;
+      .prepare("SELECT id, password_hash, role FROM users WHERE username = ?")
+      .get(username) as
+      | { id: number; password_hash: string; role: string }
+      | undefined;
     return row ?? null;
+  }
+
+  findUserById(id: number): { id: number; username: string; role: string } | null {
+    const row = this.db
+      .prepare("SELECT id, username, role FROM users WHERE id = ?")
+      .get(id) as { id: number; username: string; role: string } | undefined;
+    return row ?? null;
+  }
+
+  listUsers(): UserInfo[] {
+    const rows = this.db
+      .prepare("SELECT id, username, role, created_at FROM users ORDER BY id ASC")
+      .all() as unknown as {
+      id: number;
+      username: string;
+      role: string;
+      created_at: number;
+    }[];
+    return rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      role: r.role as UserRole,
+      createdAt: r.created_at,
+    }));
+  }
+
+  createUser(username: string, password: string, role: UserRole): UserInfo {
+    const createdAt = Date.now();
+    const res = this.db
+      .prepare(
+        "INSERT INTO users (username, password_hash, role, created_at) VALUES (?, ?, ?, ?)",
+      )
+      .run(username, hashPassword(password), role, createdAt);
+    return {
+      id: Number(res.lastInsertRowid),
+      username,
+      role,
+      createdAt,
+    };
+  }
+
+  updateUser(
+    id: number,
+    patch: { password?: string; role?: UserRole },
+  ): boolean {
+    const existing = this.findUserById(id);
+    if (!existing) return false;
+    if (patch.password) {
+      this.db
+        .prepare("UPDATE users SET password_hash = ? WHERE id = ?")
+        .run(hashPassword(patch.password), id);
+    }
+    if (patch.role) {
+      this.db.prepare("UPDATE users SET role = ? WHERE id = ?").run(patch.role, id);
+    }
+    return true;
+  }
+
+  deleteUser(id: number): boolean {
+    const res = this.db.prepare("DELETE FROM users WHERE id = ?").run(id);
+    return res.changes > 0;
+  }
+
+  countAdmins(): number {
+    const row = this.db
+      .prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin'")
+      .get() as { n: number };
+    return row.n;
   }
 
   // ---- devices --------------------------------------------------------
@@ -443,6 +557,214 @@ export class Store {
       .get(deviceId) as { hostname: string } | undefined;
     return row?.hostname ?? "unknown";
   }
+
+  // ---- jobs -----------------------------------------------------------------
+
+  createJob(
+    id: string,
+    name: string,
+    script: string,
+    timeoutSec: number,
+    createdBy: string,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT INTO jobs (id, name, script, timeout_sec, status, created_by, created_at)
+         VALUES (?, ?, ?, ?, 'running', ?, ?)`,
+      )
+      .run(id, name, script, timeoutSec, createdBy, Date.now());
+  }
+
+  addJobResult(
+    jobId: string,
+    deviceId: string,
+    status: JobResult["status"],
+    note?: string,
+  ): void {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO job_results (job_id, device_id, status, stdout, stderr)
+         VALUES (?, ?, ?, '', ?)`,
+      )
+      .run(jobId, deviceId, status, note ?? "");
+  }
+
+  jobResultExists(jobId: string, deviceId: string): boolean {
+    const row = this.db
+      .prepare("SELECT 1 FROM job_results WHERE job_id = ? AND device_id = ?")
+      .get(jobId, deviceId);
+    return row !== undefined;
+  }
+
+  markJobResultStarted(jobId: string, deviceId: string): void {
+    this.db
+      .prepare(
+        "UPDATE job_results SET status = 'running', started_at = ? WHERE job_id = ? AND device_id = ?",
+      )
+      .run(Date.now(), jobId, deviceId);
+  }
+
+  appendJobOutput(
+    jobId: string,
+    deviceId: string,
+    stream: "stdout" | "stderr",
+    data: string,
+  ): void {
+    const column = stream === "stdout" ? "stdout" : "stderr";
+    const row = this.db
+      .prepare(
+        `SELECT ${column} AS out FROM job_results WHERE job_id = ? AND device_id = ?`,
+      )
+      .get(jobId, deviceId) as { out: string } | undefined;
+    if (!row) return;
+    const MAX = 200 * 1024; // cap stored output per stream
+    const next = row.out.length >= MAX ? row.out : (row.out + data).slice(0, MAX);
+    this.db
+      .prepare(
+        `UPDATE job_results SET ${column} = ? WHERE job_id = ? AND device_id = ?`,
+      )
+      .run(next, jobId, deviceId);
+  }
+
+  finishJobResult(
+    jobId: string,
+    deviceId: string,
+    status: JobResult["status"],
+    exitCode: number | null,
+    note?: string,
+  ): void {
+    const sets: string[] = ["status = ?", "exit_code = ?", "finished_at = ?"];
+    const params: (string | number | null)[] = [status, exitCode, Date.now()];
+    if (note) {
+      sets.push("stderr = stderr || ?");
+      params.push(note);
+    }
+    this.db
+      .prepare(
+        `UPDATE job_results SET ${sets.join(", ")} WHERE job_id = ? AND device_id = ?`,
+      )
+      .run(...params, jobId, deviceId);
+  }
+
+  /** Mark every non-terminal result of a job as the given status. */
+  finishAllJobResults(
+    jobId: string,
+    status: JobResult["status"],
+    note?: string,
+  ): void {
+    const sets: string[] = ["status = ?", "finished_at = ?"];
+    const params: (string | number)[] = [status, Date.now()];
+    if (note) {
+      sets.push("stderr = stderr || ?");
+      params.push(note);
+    }
+    this.db
+      .prepare(
+        `UPDATE job_results SET ${sets.join(", ")}
+         WHERE job_id = ? AND status IN ('pending', 'running')`,
+      )
+      .run(...params, jobId);
+  }
+
+  getJob(jobId: string): JobSummary | null {
+    const row = this.db
+      .prepare(
+        `SELECT j.*, r.total, r.success, r.failed, r.skipped, r.pending, r.running
+         FROM jobs j
+         LEFT JOIN (
+           SELECT job_id,
+             COUNT(*) AS total,
+             SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success,
+             SUM(CASE WHEN status IN ('failed', 'timeout') THEN 1 ELSE 0 END) AS failed,
+             SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) AS skipped,
+             SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+             SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) AS running
+           FROM job_results GROUP BY job_id
+         ) r ON r.job_id = j.id
+         WHERE j.id = ?`,
+      )
+      .get(jobId) as JobRow | undefined;
+    return row ? rowToJobSummary(row) : null;
+  }
+
+  listJobs(): JobSummary[] {
+    const rows = this.db
+      .prepare(
+        `SELECT j.*, r.total, r.success, r.failed, r.skipped, r.pending, r.running
+         FROM jobs j
+         LEFT JOIN (
+           SELECT job_id,
+             COUNT(*) AS total,
+             SUM(CASE WHEN status = 'success' THEN 1 ELSE 0 END) AS success,
+             SUM(CASE WHEN status IN ('failed', 'timeout') THEN 1 ELSE 0 END) AS failed,
+             SUM(CASE WHEN status = 'skipped' THEN 1 ELSE 0 END) AS skipped,
+             SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending,
+             SUM(CASE WHEN status = 'running' THEN 1 ELSE 0 END) AS running
+           FROM job_results GROUP BY job_id
+         ) r ON r.job_id = j.id
+         ORDER BY j.created_at DESC LIMIT 100`,
+      )
+      .all() as unknown as JobRow[];
+    return rows.map(rowToJobSummary);
+  }
+
+  getJobResults(jobId: string): JobResult[] {
+    const rows = this.db
+      .prepare(
+        `SELECT r.*, d.hostname AS device_hostname
+         FROM job_results r
+         LEFT JOIN devices d ON d.id = r.device_id
+         WHERE r.job_id = ?
+         ORDER BY d.hostname ASC`,
+      )
+      .all(jobId) as unknown as JobResultRow[];
+    return rows.map((r) => ({
+      jobId: r.job_id,
+      deviceId: r.device_id,
+      deviceHostname: r.device_hostname ?? r.device_id,
+      status: r.status as JobResult["status"],
+      exitCode: r.exit_code,
+      stdout: r.stdout,
+      stderr: r.stderr,
+      startedAt: r.started_at,
+      finishedAt: r.finished_at,
+    }));
+  }
+
+  /** Returns the devices with non-terminal results for a job. */
+  listActiveJobResultDevices(jobId: string): string[] {
+    const rows = this.db
+      .prepare(
+        "SELECT device_id FROM job_results WHERE job_id = ? AND status IN ('pending', 'running')",
+      )
+      .all(jobId) as { device_id: string }[];
+    return rows.map((r) => r.device_id);
+  }
+
+  setJobStatus(jobId: string, status: JobSummary["status"]): void {
+    this.db
+      .prepare(
+        "UPDATE jobs SET status = ?, finished_at = ? WHERE id = ? AND status = 'running'",
+      )
+      .run(status, Date.now(), jobId);
+  }
+
+  deleteJob(jobId: string): boolean {
+    this.db.prepare("DELETE FROM job_results WHERE job_id = ?").run(jobId);
+    const res = this.db.prepare("DELETE FROM jobs WHERE id = ?").run(jobId);
+    return res.changes > 0;
+  }
+
+  /** Devices with non-terminal results for any running job. */
+  listActiveResultsForDevice(deviceId: string): { job_id: string }[] {
+    return this.db
+      .prepare(
+        `SELECT r.job_id FROM job_results r
+         JOIN jobs j ON j.id = r.job_id
+         WHERE r.device_id = ? AND r.status IN ('pending', 'running') AND j.status = 'running'`,
+      )
+      .all(deviceId) as { job_id: string }[];
+  }
 }
 
 function rowToDevice(row: DeviceRow): Device {
@@ -495,6 +817,54 @@ interface AlertRow {
   created_at: number;
   last_seen_at: number;
   resolved_at: number | null;
+}
+
+interface JobRow {
+  id: string;
+  name: string;
+  script: string;
+  timeout_sec: number;
+  status: string;
+  created_by: string;
+  created_at: number;
+  finished_at: number | null;
+  total: number | null;
+  success: number | null;
+  failed: number | null;
+  skipped: number | null;
+  pending: number | null;
+  running: number | null;
+}
+
+interface JobResultRow {
+  job_id: string;
+  device_id: string;
+  device_hostname: string | null;
+  status: string;
+  exit_code: number | null;
+  stdout: string;
+  stderr: string;
+  started_at: number | null;
+  finished_at: number | null;
+}
+
+function rowToJobSummary(row: JobRow): JobSummary {
+  return {
+    id: row.id,
+    name: row.name,
+    script: row.script,
+    timeoutSec: row.timeout_sec,
+    status: row.status as JobSummary["status"],
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    finishedAt: row.finished_at,
+    total: row.total ?? 0,
+    success: row.success ?? 0,
+    failed: row.failed ?? 0,
+    skipped: row.skipped ?? 0,
+    pending: row.pending ?? 0,
+    running: row.running ?? 0,
+  };
 }
 
 function rowToRule(row: AlertRuleRow): AlertRule {

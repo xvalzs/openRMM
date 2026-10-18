@@ -68,7 +68,9 @@ export type AgentMessage =
   | { type: "pong"; ts: number }
   | { type: "shell_started"; sessionId: string; pid: number }
   | { type: "shell_data"; sessionId: string; data: string }
-  | { type: "shell_exit"; sessionId: string; code: number | null };
+  | { type: "shell_exit"; sessionId: string; code: number | null }
+  | { type: "job_output"; jobId: string; stream: "stdout" | "stderr"; data: string }
+  | { type: "job_done"; jobId: string; exitCode: number | null; timedOut?: boolean };
 
 /** Messages sent by the server over the WebSocket. */
 export type ServerMessage =
@@ -76,7 +78,9 @@ export type ServerMessage =
   | { type: "error"; message: string }
   | { type: "shell_start"; sessionId: string; shell: string; args: string[] }
   | { type: "shell_input"; sessionId: string; data: string }
-  | { type: "shell_end"; sessionId: string };
+  | { type: "shell_end"; sessionId: string }
+  | { type: "job_run"; jobId: string; script: string; timeoutSec: number }
+  | { type: "job_cancel"; jobId: string };
 
 /** Browser → server messages on a shell channel WebSocket. */
 export type ShellClientMessage =
@@ -124,7 +128,80 @@ export interface DeviceListResponse {
 
 /** Response of `GET /api/auth/me` when logged in. */
 export interface SessionInfo {
+  userId: number;
   username: string;
+  role: UserRole;
+}
+
+// ---- Users ------------------------------------------------------------------
+
+export type UserRole = "admin" | "operator";
+
+export interface UserInfo {
+  id: number;
+  username: string;
+  role: UserRole;
+  createdAt: number;
+}
+
+export interface UserCreateInput {
+  username: string;
+  password: string;
+  role: UserRole;
+}
+
+// ---- Jobs --------------------------------------------------------------------
+
+export type JobStatus = "running" | "completed" | "cancelled";
+export type JobResultStatus =
+  | "pending"
+  | "running"
+  | "success"
+  | "failed"
+  | "timeout"
+  | "skipped"
+  | "cancelled";
+
+export interface JobSummary {
+  id: string;
+  name: string;
+  script: string;
+  timeoutSec: number;
+  status: JobStatus;
+  createdAt: number;
+  createdBy: string;
+  finishedAt: number | null;
+  total: number;
+  success: number;
+  failed: number;
+  skipped: number;
+  pending: number;
+  running: number;
+}
+
+export interface JobCreateInput {
+  name: string;
+  script: string;
+  /** null/omitted = every online device. */
+  deviceIds?: string[] | null;
+  timeoutSec?: number;
+}
+
+export interface JobResult {
+  jobId: string;
+  deviceId: string;
+  deviceHostname: string;
+  status: JobResultStatus;
+  exitCode: number | null;
+  stdout: string;
+  stderr: string;
+  startedAt: number | null;
+  finishedAt: number | null;
+}
+
+export interface JobDetail {
+  job: JobSummary;
+  results: JobResult[];
 }
 
 // ---- Alert rules ------------------------------------------------------------

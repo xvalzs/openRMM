@@ -36,9 +36,11 @@ export default function DeviceDetail({ device, onClose, onOpenShell }: DeviceDet
       </div>
 
       <div className="detail-actions">
-        <button className="shell-btn" onClick={onOpenShell} disabled={!device.online} title={device.online ? "Open a remote shell" : "Device is offline"}>
-          ⌁ Open shell
-        </button>
+        {onOpenShell && (
+          <button className="shell-btn" onClick={onOpenShell} disabled={!device.online} title={device.online ? "Open a remote shell" : "Device is offline"}>
+            ⌁ Open shell
+          </button>
+        )}
       </div>
 
       <section className="detail-section">

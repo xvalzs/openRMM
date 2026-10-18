@@ -9,7 +9,11 @@ import type {
   AlertRuleInput,
   AlertSettings,
   DeviceListResponse,
+  JobDetail,
+  JobSummary,
   SessionInfo,
+  UserInfo,
+  UserRole,
 } from "@openrmm/shared";
 
 export class ApiError extends Error {
@@ -83,4 +87,37 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ webhookUrl }),
     }),
+
+  // Jobs
+  jobs: () => request<{ jobs: JobSummary[] }>("/api/jobs"),
+  job: (id: string) => request<JobDetail>(`/api/jobs/${id}`),
+  createJob: (input: {
+    name: string;
+    script: string;
+    deviceIds?: string[] | null;
+    timeoutSec?: number;
+  }) =>
+    request<JobSummary>("/api/jobs", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  cancelJob: (id: string) =>
+    request<{ ok: true }>(`/api/jobs/${id}/cancel`, { method: "POST" }),
+  deleteJob: (id: string) =>
+    request<{ ok: true }>(`/api/jobs/${id}`, { method: "DELETE" }),
+
+  // Users (admin only)
+  users: () => request<{ users: UserInfo[] }>("/api/users"),
+  createUser: (input: { username: string; password: string; role: UserRole }) =>
+    request<UserInfo>("/api/users", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  updateUser: (id: number, patch: { password?: string; role?: UserRole }) =>
+    request<UserInfo>(`/api/users/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }),
+  deleteUser: (id: number) =>
+    request<{ ok: true }>(`/api/users/${id}`, { method: "DELETE" }),
 };

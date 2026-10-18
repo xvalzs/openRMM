@@ -4,6 +4,8 @@ import { api } from "./api.js";
 import Login from "./Login.js";
 import Devices from "./Devices.js";
 import Alerts from "./Alerts.js";
+import Jobs from "./Jobs.js";
+import Users from "./Users.js";
 import Topbar, { type View } from "./Topbar.js";
 
 export default function App(): React.JSX.Element {
@@ -50,10 +52,24 @@ export default function App(): React.JSX.Element {
     return <Login onLogin={setSession} />;
   }
 
+  const isAdmin = session.role === "admin";
+  const content =
+    view === "devices" ? (
+      <Devices isAdmin={isAdmin} />
+    ) : view === "alerts" ? (
+      <Alerts isAdmin={isAdmin} />
+    ) : view === "jobs" ? (
+      <Jobs />
+    ) : view === "users" && isAdmin ? (
+      <Users session={session} />
+    ) : (
+      <Devices isAdmin={isAdmin} />
+    );
+
   return (
     <div className="shell">
       <Topbar session={session} view={view} onNavigate={setView} onLogout={handleLogout} />
-      {view === "devices" ? <Devices /> : <Alerts />}
+      {content}
     </div>
   );
 }

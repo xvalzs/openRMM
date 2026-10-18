@@ -9,7 +9,7 @@ import Fastify from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
-import { OFFLINE_AFTER_MS, PROTOCOL_VERSION } from "@openrmm/shared";
+import { OFFLINE_AFTER_MS, PROTOCOL_VERSION, type UserRole } from "@openrmm/shared";
 import { loadConfig } from "./config.js";
 import { randomHex } from "./crypto.js";
 import { Store } from "./db.js";
@@ -18,8 +18,11 @@ import { registerAgentRoutes, createSocketRegistry } from "./routes/agent.js";
 import { registerAuthRoutes } from "./routes/auth.js";
 import { registerDeviceRoutes } from "./routes/devices.js";
 import { registerAlertRoutes } from "./routes/alerts.js";
+import { registerJobRoutes } from "./routes/jobs.js";
+import { registerUserRoutes } from "./routes/users.js";
 import { ShellHub, registerShellRoutes } from "./shell.js";
 import { AlertService } from "./alerts.js";
+import { JobsService } from "./jobs.js";
 
 const VERSION = "0.1.0";
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +54,7 @@ async function main(): Promise<void> {
   const sockets = createSocketRegistry();
   const shellHub = new ShellHub();
   const alertService = new AlertService(store);
+  const jobsService = new JobsService(store, sockets);
 
   const app = Fastify({
     logger: { level: process.env.RMM_LOG_LEVEL ?? "info" },
@@ -70,9 +74,11 @@ async function main(): Promise<void> {
       return;
     }
     const user = store.db
-      .prepare("SELECT username FROM users WHERE id = ?")
-      .get(userId) as { username: string } | undefined;
-    req.session = user ? ({ userId, username: user.username } satisfies Session) : null;
+      .prepare("SELECT username, role FROM users WHERE id = ?")
+      .get(userId) as { username: string; role: string } | undefined;
+    req.session = user
+      ? ({ userId, username: user.username, role: user.role as UserRole } satisfies Session)
+      : null;
   });
 
   // ---- Routes ----------------------------------------------------------
@@ -82,10 +88,12 @@ async function main(): Promise<void> {
     protocolVersion: PROTOCOL_VERSION,
   }));
 
-  registerAgentRoutes(app, store, sockets, shellHub, alertService);
+  registerAgentRoutes(app, store, sockets, shellHub, alertService, jobsService);
   registerAuthRoutes(app, store, sessionSecret);
   registerDeviceRoutes(app, store);
   registerAlertRoutes(app, store);
+  registerJobRoutes(app, store, jobsService);
+  registerUserRoutes(app, store);
   registerShellRoutes(app, store, sockets, shellHub);
 
   // ---- Serve the built dashboard (if present) --------------------------
@@ -107,6 +115,7 @@ async function main(): Promise<void> {
   const sweeper = setInterval(() => {
     try {
       store.sweepOffline(OFFLINE_AFTER_MS);
+      jobsService.sweepTimeouts();
     } catch (err) {
       app.log.error({ err }, "offline sweep failed");
     }
