@@ -1,0 +1,25 @@
+{
+  "name": "openrmm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Open-source Remote Monitoring and Management (RMM): lightweight Node.js agent, Fastify server, React dashboard.",
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build -w @openrmm/shared && npm run build -w @openrmm/server && npm run build -w @openrmm/agent && npm run build -w @openrmm/dashboard",
+    "dev": "concurrently -n server,dashboard -c blue,magenta \"npm run dev:server\" \"npm run dev:dashboard\"",
+    "dev:server": "npm run dev -w @openrmm/server",
+    "dev:dashboard": "npm run dev -w @openrmm/dashboard",
+    "start:server": "npm run start -w @openrmm/server",
+    "start:agent": "npm run start -w @openrmm/agent"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}
