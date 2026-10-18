@@ -62,6 +62,16 @@ fs.copyFileSync(
 );
 fs.writeFileSync(path.join(outDir, "README.txt"), readmeText(version));
 
+// 4. Windows service wrapper (WinSW, MIT) used by `service install`.
+fs.copyFileSync(
+  path.join(pkgDir, "vendor", "winsw", "winsw.exe"),
+  path.join(outDir, "winsw.exe"),
+);
+fs.writeFileSync(
+  path.join(outDir, "THIRD_PARTY_NOTICES.txt"),
+  thirdPartyNotices(),
+);
+
 // 4. Zip on Windows; leave the folder elsewhere.
 if (process.platform === "win32") {
   const zip = path.join(releaseRoot, `openrmm-agent-v${version}.zip`);
@@ -98,13 +108,56 @@ function readmeText(v) {
     "Commands:",
     "  install     save server URL + install key (config: ~/.openrmm-agent)",
     "  run         connect to the server and keep reporting",
+    "  service     install/uninstall/start/stop/status the native service",
     "  uninstall   remove the local config",
     "  version     print the agent version",
     "",
-    "Keep the agent running permanently: on Windows wrap `run` with NSSM or",
-    "Task Scheduler; on macOS create a LaunchAgent plist.",
+    "Run as a native service:",
+    "  Windows (run from an elevated PowerShell):",
+    "    openrmm-agent.cmd service install",
+    "  macOS:",
+    "    ./openrmm-agent service install",
     "",
     "Licensed under AGPL-3.0-or-later; see LICENSE.",
+    "",
+  ].join("\n");
+}
+
+function thirdPartyNotices() {
+  return [
+    "OpenRMM agent package — third-party notices",
+    "===========================================",
+    "",
+    "WinSW (winsw.exe)",
+    "-----------------",
+    "Copyright (c) Kohsuke Kawaguchi, Oleg Nenashev and contributors.",
+    "Licensed under the MIT License.",
+    "https://github.com/winsw/winsw",
+    "Version 2.12.0 (NET461 build).",
+    "Used as the Windows service wrapper for `openrmm-agent service install`.",
+    "Requires .NET Framework 4.6.1 or later (built into Windows 10/11).",
+    "",
+    "MIT License",
+    "-----------",
+    "",
+    "Permission is hereby granted, free of charge, to any person obtaining",
+    "a copy of this software and associated documentation files (the",
+    "'Software'), to deal in the Software without restriction, including",
+    "without limitation the rights to use, copy, modify, merge, publish,",
+    "distribute, sublicense, and/or sell copies of the Software, and to",
+    "permit persons to whom the Software is furnished to do so, subject to",
+    "the following conditions:",
+    "",
+    "The above copyright notice and this permission notice shall be",
+    "included in all copies or substantial portions of the Software.",
+    "",
+    "THE SOFTWARE IS PROVIDED 'AS IS', WITHOUT WARRANTY OF ANY KIND,",
+    "EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF",
+    "MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.",
+    "IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY",
+    "CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,",
+    "TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE",
+    "SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.",
     "",
   ].join("\n");
 }

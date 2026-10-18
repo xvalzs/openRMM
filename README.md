@@ -31,13 +31,13 @@ WebSocket channel, and you watch everything from a web dashboard.
 - Live metrics via heartbeat every 15 s; devices flip to *offline* after 45 s of silence
 - Dashboard with sign-in (scrypt-hashed passwords, HMAC-signed session cookies), device list, resource usage bars, detail pane
 - Reconnection with exponential backoff, watchdog, and re-registration on every connect
+- **Native service installation**: `service install` registers the agent as a Windows service (WinSW, auto-restart on failure) or a macOS LaunchAgent (KeepAlive)
 - TLS support via `RMM_TLS_CERT` / `RMM_TLS_KEY` (or any reverse proxy)
 
 ### Roadmap
 
-Remote shell, command/job dispatch, alert rules + webhooks, service
-installation (Windows service / launchd), Linux agent builds, multi-user
-permissions, patch/update management.
+Remote shell, command/job dispatch, alert rules + webhooks, Linux agent
+builds, multi-user permissions, patch/update management.
 
 ## Requirements
 
@@ -118,12 +118,27 @@ Agent settings:
 
 ## Running agents as services
 
-The MVP runs agents in the foreground. To keep them running after logout:
+The agent can install itself as a native service (no external tools needed):
 
-- **Windows:** wrap `node .../dist/index.js run` with [NSSM](https://nssm.cc/) or Task Scheduler.
-- **macOS:** create a LaunchAgent plist calling the same command.
+```bash
+# Windows — run from an elevated PowerShell; registers a real SCM service
+# that auto-restarts on failure (requires .NET Framework 4.6.1+, built into
+# Windows 10/11).
+openrmm-agent service install
+openrmm-agent service status
+openrmm-agent service stop
+openrmm-agent service uninstall
 
-Native service installation is on the roadmap.
+# macOS — installs a user LaunchAgent with KeepAlive.
+openrmm-agent service install
+openrmm-agent service status
+openrmm-agent service uninstall
+```
+
+The service runs the agent from its config directory (`~/.openrmm-agent` by
+default, `RMM_AGENT_HOME` to override) and preserves the device identity.
+On Windows the service runs as LocalSystem; `service install` must be run
+from an Administrator terminal.
 
 ## Security notes
 
@@ -139,6 +154,7 @@ packages/
   shared/     wire protocol + shared types
   server/     Fastify server (REST + WebSocket + SQLite)
   agent/      endpoint agent (Windows, macOS)
+    vendor/winsw/  WinSW 2.12.0 (MIT) Windows service wrapper
   dashboard/  React + Vite web UI
 ```
 

@@ -12,6 +12,7 @@
 import { agentVersion } from "./inventory.js";
 import { agentHome, loadConfig, newClientId, removeConfig, writeConfig } from "./config.js";
 import { createAgentClient } from "./client.js";
+import { runServiceAction, type ServiceAction } from "./service.js";
 
 const USAGE = `
 OpenRMM agent
@@ -19,8 +20,16 @@ OpenRMM agent
 Usage:
   openrmm-agent install --server <url> --key <installKey>
   openrmm-agent run
+  openrmm-agent service install|uninstall|start|stop|status
   openrmm-agent uninstall
   openrmm-agent version
+
+Service commands (Windows: requires Administrator; macOS: LaunchAgent):
+  install     register and start the agent as a native service
+  uninstall   stop and remove the service
+  start       start the service
+  stop        stop the service
+  status      show the service state
 
 Environment:
   RMM_AGENT_HOME    directory for agent config (default: ~/.openrmm-agent)
@@ -97,6 +106,22 @@ function main(): void {
         log(`fatal: ${err.message}`);
         process.exit(1);
       });
+      break;
+    }
+
+    case "service": {
+      const sub = process.argv.slice(3)[0];
+      const valid: ServiceAction[] = ["install", "uninstall", "start", "stop", "status"];
+      if (!sub || !valid.includes(sub as ServiceAction)) {
+        console.error("service requires one of: install, uninstall, start, stop, status\n\n" + USAGE);
+        process.exit(1);
+      }
+      try {
+        runServiceAction(sub as ServiceAction);
+      } catch (err) {
+        console.error(`[openrmm-agent] service ${sub} failed: ${(err as Error).message}`);
+        process.exit(1);
+      }
       break;
     }
 
