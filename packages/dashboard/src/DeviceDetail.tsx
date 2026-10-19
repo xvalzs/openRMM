@@ -7,6 +7,7 @@ interface DeviceDetailProps {
   device: Device;
   onClose: () => void;
   onOpenShell?: () => void;
+  onOpenScreen?: () => void;
   isAdmin?: boolean;
 }
 
@@ -19,7 +20,7 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
   );
 }
 
-export default function DeviceDetail({ device, onClose, onOpenShell, isAdmin }: DeviceDetailProps): React.JSX.Element {
+export default function DeviceDetail({ device, onClose, onOpenShell, onOpenScreen, isAdmin }: DeviceDetailProps): React.JSX.Element {
   const memPct = device.totalMem > 0 ? (device.memUsed / device.totalMem) * 100 : 0;
   const [processes, setProcesses] = useState<ProcessInfo[] | null>(null);
   const [procTs, setProcTs] = useState<number | null>(null);
@@ -84,6 +85,11 @@ export default function DeviceDetail({ device, onClose, onOpenShell, isAdmin }: 
       </div>
 
       <div className="detail-actions">
+        {onOpenScreen && (
+          <button className="screen-btn" onClick={onOpenScreen} disabled={!device.online} title={device.online ? "View and control the screen" : "Device is offline"}>
+            ▣ View screen
+          </button>
+        )}
         {onOpenShell && (
           <button className="shell-btn" onClick={onOpenShell} disabled={!device.online} title={device.online ? "Open a remote shell" : "Device is offline"}>
             ⌁ Open shell

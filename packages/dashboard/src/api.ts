@@ -181,4 +181,10 @@ export const api = {
     request<{ ok: true }>(`/api/devices/${deviceId}/processes/refresh`, { method: "POST" }),
   killProcess: (deviceId: string, pid: number) =>
     request<{ ok: true }>(`/api/devices/${deviceId}/processes/${pid}/kill`, { method: "POST" }),
+
+  // Screen
+  createScreen: (deviceId: string) =>
+    request<{ sessionId: string }>(`/api/devices/${deviceId}/screen`, { method: "POST" }),
+  endScreen: (sessionId: string) =>
+    request<{ ok: true }>(`/api/screens/${sessionId}`, { method: "DELETE" }),
 };

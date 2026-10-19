@@ -77,7 +77,11 @@ export type AgentMessage =
   | { type: "file_data"; transferId: string; seq: number; data: string }
   | { type: "file_done"; transferId: string; ok: boolean; error?: string }
   | { type: "process_list_result"; processes: ProcessInfo[] }
-  | { type: "process_kill_result"; pid: number; ok: boolean; error?: string };
+  | { type: "process_kill_result"; pid: number; ok: boolean; error?: string }
+  | { type: "screen_started"; sessionId: string; width: number; height: number }
+  | { type: "screen_frame"; sessionId: string; seq: number; data: string }
+  | { type: "screen_error"; sessionId: string; error: string }
+  | { type: "screen_stopped"; sessionId: string };
 
 /** Messages sent by the server over the WebSocket. */
 export type ServerMessage =
@@ -96,7 +100,10 @@ export type ServerMessage =
   | { type: "file_cancel"; transferId: string }
   | { type: "shell_resize"; sessionId: string; cols: number; rows: number }
   | { type: "process_list" }
-  | { type: "process_kill"; pid: number };
+  | { type: "process_kill"; pid: number }
+  | { type: "screen_start"; sessionId: string; scale: number }
+  | { type: "screen_stop"; sessionId: string }
+  | { type: "screen_input"; sessionId: string; input: ScreenInput };
 
 /** Browser → server messages on a shell channel WebSocket. */
 export type ShellClientMessage =
@@ -369,3 +376,25 @@ export interface FileTransferInfo {
   createdAt: number;
   finishedAt: number | null;
 }
+
+// ---- Remote desktop -------------------------------------------------------------------
+
+export type ScreenInput =
+  | { kind: "mouse"; action: "move"; x: number; y: number }
+  | { kind: "mouse"; action: "down"; x: number; y: number; button: "left" | "right" }
+  | { kind: "mouse"; action: "up"; x: number; y: number; button: "left" | "right" }
+  | { kind: "mouse"; action: "wheel"; x: number; y: number; delta: number }
+  | { kind: "key"; action: "down" | "up"; vk: number }
+  | { kind: "text"; text: string };
+
+/** Server → browser messages on a screen channel WebSocket. */
+export type ScreenServerMessage =
+  | { type: "started"; width: number; height: number }
+  | { type: "frame"; seq: number; data: string }
+  | { type: "error"; message: string }
+  | { type: "stopped" };
+
+/** Browser → server messages on a screen channel WebSocket. */
+export type ScreenClientMessage =
+  | { type: "input"; input: ScreenInput }
+  | { type: "ping"; ts: number };

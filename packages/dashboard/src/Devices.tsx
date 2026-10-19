@@ -4,6 +4,7 @@ import { api } from "./api.js";
 import { formatAgo, formatBytes, formatPercent, formatUptime } from "./format.js";
 import DeviceDetail from "./DeviceDetail.js";
 import ShellPanel from "./ShellPanel.js";
+import ScreenPanel from "./ScreenPanel.js";
 
 const POLL_MS = 5_000;
 
@@ -37,6 +38,7 @@ export default function Devices({ isAdmin }: DevicesProps): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [shellDevice, setShellDevice] = useState<Device | null>(null);
+  const [screenDevice, setScreenDevice] = useState<Device | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -164,6 +166,7 @@ export default function Devices({ isAdmin }: DevicesProps): React.JSX.Element {
             device={selected}
             onClose={() => setSelectedId(null)}
             onOpenShell={isAdmin ? () => setShellDevice(selected) : undefined}
+            onOpenScreen={isAdmin ? () => setScreenDevice(selected) : undefined}
             isAdmin={isAdmin}
           />
         )}
@@ -174,6 +177,14 @@ export default function Devices({ isAdmin }: DevicesProps): React.JSX.Element {
           deviceId={shellDevice.id}
           deviceName={shellDevice.hostname}
           onClose={() => setShellDevice(null)}
+        />
+      )}
+
+      {screenDevice && (
+        <ScreenPanel
+          deviceId={screenDevice.id}
+          deviceName={screenDevice.hostname}
+          onClose={() => setScreenDevice(null)}
         />
       )}
     </div>

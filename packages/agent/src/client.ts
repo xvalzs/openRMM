@@ -16,6 +16,7 @@ import { createJobManager } from "./jobs.js";
 import { createUpdateManager } from "./updates.js";
 import { createFileManager } from "./files.js";
 import { createProcessManager } from "./processes.js";
+import { createScreenManager } from "./screen.js";
 import { collectPendingUpdates } from "./pending.js";
 
 export interface AgentClient {
@@ -42,6 +43,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
   const updates = createUpdateManager(send, log);
   const files = createFileManager(send);
   const procs = createProcessManager(send);
+  const screens = createScreenManager(send, log);
   let lastUpdateCheck = 0;
   let updateCheckRunning = false;
 
@@ -166,6 +168,12 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
           files.handle(msg);
         } else if (msg.type === "process_list" || msg.type === "process_kill") {
           procs.handle(msg);
+        } else if (
+          msg.type === "screen_start" ||
+          msg.type === "screen_stop" ||
+          msg.type === "screen_input"
+        ) {
+          screens.handle(msg);
         }
       };
 
@@ -178,6 +186,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
         shells.closeAll();
         jobs.closeAll();
         files.closeAll();
+        screens.closeAll();
         if (socket === ws) socket = null;
         if (opened) {
           log(`disconnected (code ${event.code}${event.reason ? `, ${event.reason}` : ""})`);
@@ -216,6 +225,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
       shells.closeAll();
       jobs.closeAll();
       files.closeAll();
+      screens.closeAll();
       socket?.close();
     },
   };

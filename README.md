@@ -39,6 +39,7 @@ WebSocket channel, and you watch everything from a web dashboard.
 - **File transfer**: push files to any device or pull them back, with per-transfer progress and SHA-256-safe streaming over the agent channel
 - **Process manager**: list a device's processes and kill them from the dashboard
 - **Real terminal shells**: ConPTY-backed PowerShell (Windows) with ANSI colors, Ctrl+C, and resize; pipe fallback where PTY is unavailable
+- **Remote desktop**: view the remote screen live (GDI capture on Windows, `screencapture` on macOS) with mouse and keyboard control
 - **API keys**: per-user Bearer tokens for scripting, inheriting the user's role, revocable at any time
 - **Audit log**: every security-relevant action (logins, user/rule/job/key changes, shells, updates) is recorded with user, target, and IP
 - **Native service installation**: `service install` registers the agent as a Windows service (WinSW, auto-restart on failure) or a macOS LaunchAgent (KeepAlive)
@@ -46,8 +47,9 @@ WebSocket channel, and you watch everything from a web dashboard.
 
 ### Roadmap
 
-Remote desktop / screen control, OS patch installation (deploying the
-updates, not just counting them), Linux agent builds, SSO/OIDC.
+Higher-fidelity remote desktop (hardware capture, better frame rate),
+OS patch installation (deploying the updates, not just counting them),
+Linux agent builds, SSO/OIDC.
 
 ## Requirements
 
@@ -209,6 +211,24 @@ end-to-end by size and are recorded in the audit log.
 
 Open a device's detail pane (admins) to list its processes and kill them.
 Lists are cached per device and refreshed on demand.
+
+## Remote desktop
+
+**View screen** on an online device opens a live view of the remote desktop
+with mouse control (click, drag, right-click, scroll) and keyboard input.
+The agent captures frames with GDI (Windows, virtual screen, scaled) or
+`screencapture` (macOS) and streams JPEGs over its WebSocket; input is
+injected via user32 on Windows (macOS input is not supported yet).
+
+Requirements and limits:
+
+- the agent must run in the **interactive user session** — a LocalSystem
+  service sits in session 0 and cannot see the desktop (the agent detects
+  a black screen and explains this); run the agent in the foreground or
+  configure the service to run as the logged-in user
+- ~1–2 fps with GDI capture, ~150 KB/frame at 75% scale — fine for
+  clicking through settings, not for watching video
+- the UAC secure desktop cannot be captured or controlled (by design)
 
 ## Audit log
 

@@ -17,6 +17,7 @@ import type { Store } from "../db.js";
 import { randomHex, sha256Hex } from "../crypto.js";
 import type { AlertService } from "../alerts.js";
 import type { ShellHub } from "../shell.js";
+import type { ScreenHub } from "../screen.js";
 import type { JobsService } from "../jobs.js";
 import type { UpdatesService } from "../updates.js";
 import type { TransfersService } from "../transfers.js";
@@ -57,6 +58,7 @@ export function registerAgentRoutes(
   store: Store,
   sockets: AgentSockets,
   hub: ShellHub,
+  screenHub: ScreenHub,
   alerts: AlertService,
   jobs: JobsService,
   updates: UpdatesService,
@@ -184,6 +186,12 @@ export function registerAgentRoutes(
           break;
         case "process_kill_result":
           app.log.info({ deviceId, pid: msg.pid, ok: msg.ok, error: msg.error }, "process kill result");
+          break;
+        case "screen_started":
+        case "screen_frame":
+        case "screen_error":
+        case "screen_stopped":
+          screenHub.handleAgentMessage(msg);
           break;
         default:
           send(socket, { type: "error", message: `unknown message type: ${String((msg as { type?: string }).type)}` });

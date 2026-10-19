@@ -27,6 +27,7 @@ import { registerAuditRoutes } from "./routes/audit.js";
 import { registerFileRoutes } from "./routes/files.js";
 import { registerProcessRoutes } from "./routes/processes.js";
 import { ShellHub, registerShellRoutes } from "./shell.js";
+import { ScreenHub, registerScreenRoutes } from "./screen.js";
 import { AlertService } from "./alerts.js";
 import { JobsService } from "./jobs.js";
 import { UpdatesService } from "./updates.js";
@@ -62,6 +63,7 @@ async function main(): Promise<void> {
 
   const sockets = createSocketRegistry();
   const shellHub = new ShellHub();
+  const screenHub = new ScreenHub();
   const alertService = new AlertService(store);
   const jobsService = new JobsService(store, sockets);
   const updatesService = new UpdatesService(store, sockets);
@@ -114,7 +116,7 @@ async function main(): Promise<void> {
     protocolVersion: PROTOCOL_VERSION,
   }));
 
-  registerAgentRoutes(app, store, sockets, shellHub, alertService, jobsService, updatesService, transfersService, processesService);
+  registerAgentRoutes(app, store, sockets, shellHub, screenHub, alertService, jobsService, updatesService, transfersService, processesService);
   registerAuthRoutes(app, store, sessionSecret);
   registerDeviceRoutes(app, store);
   registerAlertRoutes(app, store);
@@ -126,6 +128,7 @@ async function main(): Promise<void> {
   registerFileRoutes(app, store, transfersService);
   registerProcessRoutes(app, store, processesService);
   registerShellRoutes(app, store, sockets, shellHub);
+  registerScreenRoutes(app, store, sockets, screenHub);
 
   // ---- Serve the built dashboard (if present) --------------------------
   const dashboardDist = path.resolve(here, "..", "..", "dashboard", "dist");
