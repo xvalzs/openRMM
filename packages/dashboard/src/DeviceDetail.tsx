@@ -1,10 +1,13 @@
-import type { Device } from "@openrmm/shared";
+import { useEffect, useState } from "react";
+import type { Device, ProcessInfo } from "@openrmm/shared";
+import { api } from "./api.js";
 import { formatAgo, formatBytes, formatDateTime, formatPercent, formatUptime } from "./format.js";
 
 interface DeviceDetailProps {
   device: Device;
   onClose: () => void;
   onOpenShell?: () => void;
+  isAdmin?: boolean;
 }
 
 function Stat({ label, value }: { label: string; value: string }): React.JSX.Element {
@@ -16,8 +19,53 @@ function Stat({ label, value }: { label: string; value: string }): React.JSX.Ele
   );
 }
 
-export default function DeviceDetail({ device, onClose, onOpenShell }: DeviceDetailProps): React.JSX.Element {
+export default function DeviceDetail({ device, onClose, onOpenShell, isAdmin }: DeviceDetailProps): React.JSX.Element {
   const memPct = device.totalMem > 0 ? (device.memUsed / device.totalMem) * 100 : 0;
+  const [processes, setProcesses] = useState<ProcessInfo[] | null>(null);
+  const [procTs, setProcTs] = useState<number | null>(null);
+  const [procError, setProcError] = useState<string | null>(null);
+  const [procBusy, setProcBusy] = useState(false);
+
+  async function refreshProcesses(): Promise<void> {
+    if (!device.online) return;
+    setProcBusy(true);
+    setProcError(null);
+    try {
+      if (procTs === null) {
+        await api.refreshProcesses(device.id);
+        await new Promise((r) => setTimeout(r, 1500));
+      } else {
+        await api.refreshProcesses(device.id);
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+      const res = await api.processes(device.id);
+      setProcesses(res.processes);
+      setProcTs(res.ts);
+    } catch (err) {
+      setProcError(err instanceof Error ? err.message : "failed to load processes");
+    } finally {
+      setProcBusy(false);
+    }
+  }
+
+  async function killProcess(pid: number): Promise<void> {
+    try {
+      await api.killProcess(device.id, pid);
+      await new Promise((r) => setTimeout(r, 800));
+      await api.refreshProcesses(device.id);
+      await new Promise((r) => setTimeout(r, 1200));
+      const res = await api.processes(device.id);
+      setProcesses(res.processes);
+      setProcTs(res.ts);
+    } catch (err) {
+      setProcError(err instanceof Error ? err.message : "failed to kill process");
+    }
+  }
+
+  useEffect(() => {
+    if (isAdmin && device.online) void refreshProcesses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [device.id]);
 
   return (
     <aside className="detail">
@@ -118,6 +166,42 @@ export default function DeviceDetail({ device, onClose, onOpenShell }: DeviceDet
           {device.id}
         </div>
       </section>
+
+      {isAdmin && device.online && (
+        <section className="detail-section">
+          <div className="processes-head">
+            <h3>Processes</h3>
+            <button className="ghost" onClick={() => void refreshProcesses()} disabled={procBusy}>
+              {procBusy ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
+          {procError && <p className="error">{procError}</p>}
+          {processes === null ? (
+            <p className="dim">{procBusy ? "Loading…" : "Click Refresh to list processes."}</p>
+          ) : (
+            <div className="process-list">
+              {[...processes]
+                .sort((a, b) => (b.memBytes ?? 0) - (a.memBytes ?? 0))
+                .slice(0, 25)
+                .map((p) => (
+                  <div key={p.pid} className="process-row">
+                    <span className="process-name" title={p.name}>
+                      {p.name}
+                    </span>
+                    <span className="process-meta">
+                      pid {p.pid}
+                      {p.memBytes !== null && <> · {formatBytes(p.memBytes)}</>}
+                    </span>
+                    <button className="ghost danger" onClick={() => void killProcess(p.pid)}>
+                      Kill
+                    </button>
+                  </div>
+                ))}
+              {processes.length === 0 && <p className="dim">No processes reported.</p>}
+            </div>
+          )}
+        </section>
+      )}
     </aside>
   );
 }

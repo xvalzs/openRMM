@@ -13,8 +13,10 @@ import type {
   AuditEntry,
   DeviceListResponse,
   DeviceUpdateInfo,
+  FileTransferInfo,
   JobDetail,
   JobSummary,
+  ProcessInfo,
   SessionInfo,
   UpdateDispatchInput,
   UserInfo,
@@ -147,4 +149,36 @@ export const api = {
 
   // Audit
   audit: (limit = 200) => request<{ entries: AuditEntry[] }>(`/api/audit?limit=${limit}`),
+
+  // Files
+  transfers: () => request<{ transfers: FileTransferInfo[] }>("/api/files"),
+  uploadFile: (deviceId: string, destPath: string, file: File) => {
+    const form = new FormData();
+    form.append("deviceId", deviceId);
+    form.append("destPath", destPath);
+    form.append("file", file);
+    return fetch("/api/files/upload", {
+      method: "POST",
+      credentials: "same-origin",
+      body: form,
+    }).then(async (res) => {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) throw new ApiError(res.status, body.error ?? `HTTP ${res.status}`);
+      return body as unknown as FileTransferInfo;
+    });
+  },
+  downloadFile: (deviceId: string, path: string) =>
+    request<FileTransferInfo>("/api/files/download", {
+      method: "POST",
+      body: JSON.stringify({ deviceId, path }),
+    }),
+  downloadUrl: (transferId: string) => `/api/files/downloads/${transferId}`,
+
+  // Processes
+  processes: (deviceId: string) =>
+    request<{ processes: ProcessInfo[]; ts: number }>(`/api/devices/${deviceId}/processes`),
+  refreshProcesses: (deviceId: string) =>
+    request<{ ok: true }>(`/api/devices/${deviceId}/processes/refresh`, { method: "POST" }),
+  killProcess: (deviceId: string, pid: number) =>
+    request<{ ok: true }>(`/api/devices/${deviceId}/processes/${pid}/kill`, { method: "POST" }),
 };

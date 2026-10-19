@@ -14,6 +14,8 @@ import { collectMachineInfo, collectMetrics } from "./inventory.js";
 import { createShellManager } from "./shells.js";
 import { createJobManager } from "./jobs.js";
 import { createUpdateManager } from "./updates.js";
+import { createFileManager } from "./files.js";
+import { createProcessManager } from "./processes.js";
 import { collectPendingUpdates } from "./pending.js";
 
 export interface AgentClient {
@@ -38,6 +40,8 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
   const shells = createShellManager(send);
   const jobs = createJobManager(send);
   const updates = createUpdateManager(send, log);
+  const files = createFileManager(send);
+  const procs = createProcessManager(send);
   let lastUpdateCheck = 0;
   let updateCheckRunning = false;
 
@@ -144,13 +148,24 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
         } else if (
           msg.type === "shell_start" ||
           msg.type === "shell_input" ||
-          msg.type === "shell_end"
+          msg.type === "shell_end" ||
+          msg.type === "shell_resize"
         ) {
           shells.handle(msg);
         } else if (msg.type === "job_run" || msg.type === "job_cancel") {
           jobs.handle(msg);
         } else if (msg.type === "update_run") {
           updates.handle(msg);
+        } else if (
+          msg.type === "file_send_start" ||
+          msg.type === "file_send_chunk" ||
+          msg.type === "file_request" ||
+          msg.type === "file_data_ack" ||
+          msg.type === "file_cancel"
+        ) {
+          files.handle(msg);
+        } else if (msg.type === "process_list" || msg.type === "process_kill") {
+          procs.handle(msg);
         }
       };
 
@@ -162,6 +177,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
         clearTimers();
         shells.closeAll();
         jobs.closeAll();
+        files.closeAll();
         if (socket === ws) socket = null;
         if (opened) {
           log(`disconnected (code ${event.code}${event.reason ? `, ${event.reason}` : ""})`);
@@ -199,6 +215,7 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
       clearTimers();
       shells.closeAll();
       jobs.closeAll();
+      files.closeAll();
       socket?.close();
     },
   };

@@ -9,6 +9,7 @@ import Fastify from "fastify";
 import fastifyCookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import fastifyWebsocket from "@fastify/websocket";
+import fastifyMultipart from "@fastify/multipart";
 import { OFFLINE_AFTER_MS, PROTOCOL_VERSION, type UserRole } from "@openrmm/shared";
 import { loadConfig } from "./config.js";
 import { randomHex, sha256Hex } from "./crypto.js";
@@ -23,10 +24,14 @@ import { registerUserRoutes } from "./routes/users.js";
 import { registerUpdateRoutes } from "./routes/updates.js";
 import { registerApiKeyRoutes } from "./routes/keys.js";
 import { registerAuditRoutes } from "./routes/audit.js";
+import { registerFileRoutes } from "./routes/files.js";
+import { registerProcessRoutes } from "./routes/processes.js";
 import { ShellHub, registerShellRoutes } from "./shell.js";
 import { AlertService } from "./alerts.js";
 import { JobsService } from "./jobs.js";
 import { UpdatesService } from "./updates.js";
+import { TransfersService } from "./transfers.js";
+import { ProcessesService } from "./processes.js";
 
 const VERSION = "0.1.0";
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -60,6 +65,8 @@ async function main(): Promise<void> {
   const alertService = new AlertService(store);
   const jobsService = new JobsService(store, sockets);
   const updatesService = new UpdatesService(store, sockets);
+  const transfersService = new TransfersService(store, sockets, config.dataDir);
+  const processesService = new ProcessesService(sockets);
 
   const app = Fastify({
     logger: { level: process.env.RMM_LOG_LEVEL ?? "info" },
@@ -69,6 +76,9 @@ async function main(): Promise<void> {
   // ---- Plugins (cookie first: its onRequest hook parses cookies) ------
   await app.register(fastifyCookie);
   await app.register(fastifyWebsocket, { options: { maxPayload: 1024 * 1024 } });
+  await app.register(fastifyMultipart, {
+    limits: { fileSize: 1024 * 1024 * 1024, files: 1 },
+  });
 
   // ---- Session resolution on every request ----------------------------
   app.decorateRequest("session", null);
@@ -104,7 +114,7 @@ async function main(): Promise<void> {
     protocolVersion: PROTOCOL_VERSION,
   }));
 
-  registerAgentRoutes(app, store, sockets, shellHub, alertService, jobsService, updatesService);
+  registerAgentRoutes(app, store, sockets, shellHub, alertService, jobsService, updatesService, transfersService, processesService);
   registerAuthRoutes(app, store, sessionSecret);
   registerDeviceRoutes(app, store);
   registerAlertRoutes(app, store);
@@ -113,6 +123,8 @@ async function main(): Promise<void> {
   registerUpdateRoutes(app, store, updatesService);
   registerApiKeyRoutes(app, store);
   registerAuditRoutes(app, store);
+  registerFileRoutes(app, store, transfersService);
+  registerProcessRoutes(app, store, processesService);
   registerShellRoutes(app, store, sockets, shellHub);
 
   // ---- Serve the built dashboard (if present) --------------------------

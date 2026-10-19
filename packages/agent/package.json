@@ -12,6 +12,7 @@
     "package": "node scripts/package.mjs"
   },
   "dependencies": {
+    "@lydell/node-pty": "^1.2.0-beta.15",
     "@openrmm/shared": "0.1.0"
   },
   "devDependencies": {

@@ -54,13 +54,17 @@ export default function ShellPanel({ deviceId, deviceName, onClose }: ShellPanel
         const onResize = (): void => {
           try {
             fit.fit();
+            ws.send(
+              JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }),
+            );
           } catch {
-            /* container not sized yet */
+            /* not sized yet */
           }
         };
         const observer = new ResizeObserver(onResize);
         observer.observe(containerRef.current!);
         observerRef.current = observer;
+        term.onResize(() => onResize());
 
         const proto = location.protocol === "https:" ? "wss" : "ws";
         const ws = new WebSocket(`${proto}://${location.host}/ws/shell?sessionId=${sessionId}`);

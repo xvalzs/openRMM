@@ -164,6 +164,7 @@ export default function Devices({ isAdmin }: DevicesProps): React.JSX.Element {
             device={selected}
             onClose={() => setSelectedId(null)}
             onOpenShell={isAdmin ? () => setShellDevice(selected) : undefined}
+            isAdmin={isAdmin}
           />
         )}
       </main>

@@ -19,6 +19,8 @@ import type { AlertService } from "../alerts.js";
 import type { ShellHub } from "../shell.js";
 import type { JobsService } from "../jobs.js";
 import type { UpdatesService } from "../updates.js";
+import type { TransfersService } from "../transfers.js";
+import type { ProcessesService } from "../processes.js";
 
 export interface AgentSockets {
   /** deviceId -> live socket (only the newest registration wins). */
@@ -58,6 +60,8 @@ export function registerAgentRoutes(
   alerts: AlertService,
   jobs: JobsService,
   updates: UpdatesService,
+  transfers: TransfersService,
+  processes: ProcessesService,
 ): void {
   // ---- Registration ---------------------------------------------------
 
@@ -166,6 +170,21 @@ export function registerAgentRoutes(
         case "update_status":
           updates.handleUpdateStatus(deviceId, msg.updateId, msg.status, msg.error);
           break;
+        case "file_send_done":
+          transfers.handleFileSendDone(msg.transferId, msg.ok, msg.error);
+          break;
+        case "file_data":
+          transfers.handleFileData(msg.transferId, msg.data);
+          break;
+        case "file_done":
+          transfers.handleFileDone(msg.transferId, msg.ok, msg.error);
+          break;
+        case "process_list_result":
+          processes.handleResult(deviceId, msg.processes);
+          break;
+        case "process_kill_result":
+          app.log.info({ deviceId, pid: msg.pid, ok: msg.ok, error: msg.error }, "process kill result");
+          break;
         default:
           send(socket, { type: "error", message: `unknown message type: ${String((msg as { type?: string }).type)}` });
       }
@@ -179,6 +198,8 @@ export function registerAgentRoutes(
       if (!sockets.get(deviceId)) {
         store.setDeviceOnline(deviceId, false);
         jobs.onDeviceDisconnected(deviceId);
+        transfers.onDeviceDisconnected(deviceId);
+        processes.onDeviceDisconnected(deviceId);
         app.log.info({ deviceId }, "agent disconnected");
       }
     });

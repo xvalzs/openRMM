@@ -36,6 +36,9 @@ WebSocket channel, and you watch everything from a web dashboard.
 - **Alert rules**: threshold rules on CPU/memory/disk per device or fleet-wide, with a minimum-duration window, active → resolved lifecycle, and webhooks on state transitions
 - **Multi-user permissions**: admin and operator roles. Operators monitor, manage alerts, and run jobs; shells, user management, and webhook settings are admin-only
 - **Update management**: devices report OS pending-update counts (Windows Update COM / `softwareupdate`); admins deploy new agent bundles (URL + SHA-256) that self-verify, self-replace, and restart in place
+- **File transfer**: push files to any device or pull them back, with per-transfer progress and SHA-256-safe streaming over the agent channel
+- **Process manager**: list a device's processes and kill them from the dashboard
+- **Real terminal shells**: ConPTY-backed PowerShell (Windows) with ANSI colors, Ctrl+C, and resize; pipe fallback where PTY is unavailable
 - **API keys**: per-user Bearer tokens for scripting, inheriting the user's role, revocable at any time
 - **Audit log**: every security-relevant action (logins, user/rule/job/key changes, shells, updates) is recorded with user, target, and IP
 - **Native service installation**: `service install` registers the agent as a Windows service (WinSW, auto-restart on failure) or a macOS LaunchAgent (KeepAlive)
@@ -43,8 +46,8 @@ WebSocket channel, and you watch everything from a web dashboard.
 
 ### Roadmap
 
-OS patch installation (deploying the updates, not just counting them), Linux
-agent builds, SSO/OIDC, remote desktop.
+Remote desktop / screen control, OS patch installation (deploying the
+updates, not just counting them), Linux agent builds, SSO/OIDC.
 
 ## Requirements
 
@@ -193,6 +196,19 @@ curl -H "Authorization: Bearer $OPENRMM_KEY" https://your-server/api/devices
 ```
 
 Revoking a key invalidates it immediately.
+
+## File transfer
+
+The **Files** page (admins) pushes files to devices and pulls them back.
+Uploads stream to the agent over its WebSocket (chunked, paced); downloads
+stream back with per-chunk acknowledgements and land in the server's data
+directory for the browser to save. Both directions are verified
+end-to-end by size and are recorded in the audit log.
+
+## Process manager
+
+Open a device's detail pane (admins) to list its processes and kill them.
+Lists are cached per device and refreshed on demand.
 
 ## Audit log
 

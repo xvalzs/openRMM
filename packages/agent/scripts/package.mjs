@@ -72,6 +72,15 @@ fs.writeFileSync(
   thirdPartyNotices(),
 );
 
+// 5. node-pty (MIT) for real terminal shells. The bundled agent loads it
+//    via createRequire from its own directory.
+const nodePtySrc = path.join(pkgDir, "..", "..", "node_modules", "@lydell", "node-pty");
+if (fs.existsSync(nodePtySrc)) {
+  fs.cpSync(nodePtySrc, path.join(outDir, "node_modules", "@lydell", "node-pty"), {
+    recursive: true,
+  });
+}
+
 // 4. Zip on Windows; leave the folder elsewhere.
 if (process.platform === "win32") {
   const zip = path.join(releaseRoot, `openrmm-agent-v${version}.zip`);
@@ -136,6 +145,14 @@ function thirdPartyNotices() {
     "Version 2.12.0 (NET461 build).",
     "Used as the Windows service wrapper for `openrmm-agent service install`.",
     "Requires .NET Framework 4.6.1 or later (built into Windows 10/11).",
+    "",
+    "node-pty (@lydell/node-pty)",
+    "---------------------------",
+    "Copyright (c) 2013-2015 Christopher Jeffrey (MIT)",
+    "Copyright (c) contributors",
+    "Licensed under the MIT License.",
+    "https://github.com/lydell/node-pty",
+    "Provides real terminal (PTY) support for remote shells.",
     "",
     "MIT License",
     "-----------",

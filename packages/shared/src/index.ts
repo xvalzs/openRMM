@@ -72,7 +72,12 @@ export type AgentMessage =
   | { type: "job_output"; jobId: string; stream: "stdout" | "stderr"; data: string }
   | { type: "job_done"; jobId: string; exitCode: number | null; timedOut?: boolean }
   | { type: "update_info"; pendingUpdates: number | null; checkedAt: number }
-  | { type: "update_status"; updateId: string; status: UpdateStatus; error?: string };
+  | { type: "update_status"; updateId: string; status: UpdateStatus; error?: string }
+  | { type: "file_send_done"; transferId: string; ok: boolean; error?: string }
+  | { type: "file_data"; transferId: string; seq: number; data: string }
+  | { type: "file_done"; transferId: string; ok: boolean; error?: string }
+  | { type: "process_list_result"; processes: ProcessInfo[] }
+  | { type: "process_kill_result"; pid: number; ok: boolean; error?: string };
 
 /** Messages sent by the server over the WebSocket. */
 export type ServerMessage =
@@ -83,11 +88,20 @@ export type ServerMessage =
   | { type: "shell_end"; sessionId: string }
   | { type: "job_run"; jobId: string; script: string; timeoutSec: number }
   | { type: "job_cancel"; jobId: string }
-  | { type: "update_run"; updateId: string; url: string; sha256: string };
+  | { type: "update_run"; updateId: string; url: string; sha256: string }
+  | { type: "file_send_start"; transferId: string; name: string; size: number; destPath: string }
+  | { type: "file_send_chunk"; transferId: string; seq: number; data: string }
+  | { type: "file_request"; transferId: string; path: string }
+  | { type: "file_data_ack"; transferId: string; seq: number }
+  | { type: "file_cancel"; transferId: string }
+  | { type: "shell_resize"; sessionId: string; cols: number; rows: number }
+  | { type: "process_list" }
+  | { type: "process_kill"; pid: number };
 
 /** Browser → server messages on a shell channel WebSocket. */
 export type ShellClientMessage =
   | { type: "stdin"; data: string }
+  | { type: "resize"; cols: number; rows: number }
   | { type: "ping"; ts: number };
 
 /** Server → browser messages on a shell channel WebSocket. */
@@ -323,4 +337,35 @@ export interface AuditEntry {
   target: string | null;
   ip: string | null;
   meta: string | null;
+}
+
+// ---- Processes ----------------------------------------------------------------------
+
+export interface ProcessInfo {
+  pid: number;
+  name: string;
+  memBytes: number | null;
+}
+
+// ---- File transfers -------------------------------------------------------------------
+
+export type FileTransferStatus =
+  | "pending"
+  | "transferring"
+  | "done"
+  | "failed";
+
+export interface FileTransferInfo {
+  id: string;
+  direction: "upload" | "download";
+  deviceId: string;
+  deviceHostname: string;
+  name: string;
+  path: string;
+  size: number;
+  transferred: number;
+  status: FileTransferStatus;
+  error: string | null;
+  createdAt: number;
+  finishedAt: number | null;
 }

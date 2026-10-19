@@ -202,6 +202,13 @@ export function registerShellRoutes(
           sessionId,
           data: Buffer.from(msg.data, "utf8").toString("base64"),
         });
+      } else if (msg.type === "resize") {
+        sendAgent(agentSocket(), {
+          type: "shell_resize",
+          sessionId,
+          cols: msg.cols,
+          rows: msg.rows,
+        });
       } else if (msg.type === "ping") {
         sendBrowser(socket, { type: "pong", ts: msg.ts });
       }
