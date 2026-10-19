@@ -1,0 +1,18 @@
+# OpenRMM — Cloudflare Tunnel configuration template.
+# Copy to ~/.cloudflared/config.yml, fill in the placeholders, then:
+#   cloudflared tunnel run openrmm
+
+tunnel: <TUNNEL-UUID>
+credentials-file: /home/<you>/.cloudflared/<TUNNEL-UUID>.json
+# Windows example:
+# credentials-file: C:\Users\<you>\.cloudflared\<TUNNEL-UUID>.json
+
+ingress:
+  # Route your RMM hostname to the local server.
+  - hostname: rmm.example.com
+    service: http://localhost:8787
+    originRequest:
+      # Long-lived WebSocket channels (agents, shells, remote desktop).
+      noHappyEyeballs: true
+  # Everything else: 404.
+  - service: http_status:404

@@ -1,0 +1,25 @@
+services:
+  openrmm:
+    build: .
+    restart: unless-stopped
+    ports:
+      - "8787:8787"
+    volumes:
+      - ./data:/app/data
+    environment:
+      # Change these before going anywhere near production.
+      RMM_ADMIN_PASSWORD: "change-me-strong-password"
+      # Public URL agents (and installer builds) use to reach this server.
+      # When behind Cloudflare: https://<your-domain>  (no port).
+      RMM_PUBLIC_URL: "http://localhost:8787"
+      # Persistent session secret (e.g. `openssl rand -hex 32`).
+      RMM_SESSION_SECRET: ""
+      # Optional: pin the install key instead of the auto-generated one.
+      RMM_INSTALL_KEY: ""
+      # Optional: PFX path + password to sign built Windows installers.
+      # RMM_SIGNING_PFX: "/certs/cert.pfx"
+      # RMM_SIGNING_PFX_PASSWORD: ""
+      # Optional: TLS termination at the edge is usually handled by the
+      # reverse proxy / Cloudflare; direct TLS certs go here instead.
+      # RMM_TLS_CERT: ""
+      # RMM_TLS_KEY: ""

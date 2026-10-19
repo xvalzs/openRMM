@@ -1,0 +1,7 @@
+node_modules
+packages/*/dist
+packages/agent/release
+data
+.git
+*.log
+.env

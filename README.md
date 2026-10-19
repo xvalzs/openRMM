@@ -105,6 +105,41 @@ openrmm-agent.cmd install --server https://your-server --key <install-key>
 openrmm-agent.cmd run
 ```
 
+## Hosting (Cloudflare / Docker / VPS)
+
+OpenRMM is a self-hosted Node.js server — it cannot run on Cloudflare
+Workers/Pages (stateful WebSockets, SQLite, and a build toolchain). The
+supported hosting patterns are:
+
+**A. Cloudflare Tunnel (recommended for home/office deployments)**
+
+Run the server anywhere — this machine, a NAS, a homelab box — and expose
+it through Cloudflare's edge with your own domain, automatic HTTPS/WSS, and
+DDoS protection, with no inbound ports open. Full walkthrough in
+[`deploy/cloudflared/README.md`](deploy/cloudflared/README.md):
+
+```bash
+winget install Cloudflare.cloudflared
+cloudflared tunnel login
+cloudflared tunnel create openrmm
+# fill in deploy/cloudflared/config.yml
+cloudflared tunnel run openrmm
+```
+
+Then start the server with `RMM_PUBLIC_URL=https://rmm.example.com` so
+agents and installer builds use the public hostname.
+
+**B. Docker (recommended for a VPS)**
+
+```bash
+docker compose up -d --build
+# data lives in ./data (SQLite + uploads + installers)
+```
+
+Put Cloudflare's proxy in front of the VPS (orange-cloud the DNS record)
+or run a Tunnel to the container — either way the dashboard, agent
+WebSockets, file transfers, and shells all work through it.
+
 ## Configuration
 
 All server settings are environment variables:
