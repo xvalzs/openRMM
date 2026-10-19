@@ -36,6 +36,7 @@ WebSocket channel, and you watch everything from a web dashboard.
 - **Alert rules**: threshold rules on CPU/memory/disk per device or fleet-wide, with a minimum-duration window, active → resolved lifecycle, and webhooks on state transitions
 - **Multi-user permissions**: admin and operator roles. Operators monitor, manage alerts, and run jobs; shells, user management, and webhook settings are admin-only
 - **Update management**: devices report OS pending-update counts (Windows Update COM / `softwareupdate`); admins deploy new agent bundles (URL + SHA-256) that self-verify, self-replace, and restart in place
+- **Installer builder**: build pre-configured, renamable agent installers from the admin panel — a single Windows .exe (config baked into the binary) or a macOS/Linux zip — with per-campaign deployment tracking and optional code signing
 - **File transfer**: push files to any device or pull them back, with per-transfer progress and SHA-256-safe streaming over the agent channel
 - **Process manager**: list a device's processes and kill them from the dashboard
 - **Real terminal shells**: ConPTY-backed PowerShell (Windows) with ANSI colors, Ctrl+C, and resize; pipe fallback where PTY is unavailable
@@ -118,6 +119,10 @@ All server settings are environment variables:
 | `RMM_ADMIN_PASSWORD`   | `changeme`   | Dashboard password seeded on first boot (change it!)      |
 | `RMM_SESSION_SECRET`   | *(generated)*| HMAC key for session cookies; set it to persist sessions across restarts |
 | `RMM_TLS_CERT` / `RMM_TLS_KEY` | —     | Paths to a certificate/key to serve HTTPS/WSS             |
+| `RMM_PUBLIC_URL`       | *(derived)* | Public URL agents connect to; baked into installer builds |
+| `RMM_SIGNING_PFX`      | —           | PFX certificate used to sign built Windows installers (`signtool` required) |
+| `RMM_SIGNING_PFX_PASSWORD` | —       | Password for the signing certificate                      |
+| `RMM_AGENT_SRC`        | *(repo path)* | Agent entry point for installer builds                  |
 | `RMM_LOG_LEVEL`        | `info`       | Fastify log level                                         |
 
 Agent settings:
@@ -229,6 +234,38 @@ Requirements and limits:
 - ~1–2 fps with GDI capture, ~150 KB/frame at 75% scale — fine for
   clicking through settings, not for watching video
 - the UAC secure desktop cannot be captured or controlled (by design)
+
+## Installer builder
+
+The **Installers** page (admins) generates pre-configured, deployable agents
+— ScreenConnect-style. Pick a name and a target; the server builds:
+
+- **Windows** — a single self-contained `.exe` (Node SEA) with the server
+  URL, install key, and a deployment id baked *inside* the binary. The file
+  name is meaningless to the payload, so you can rename it freely (e.g.
+  `IT-Support-Session.exe`) without breaking anything; an Authenticode
+  signature also hashes content, not names, so renames stay valid.
+  Devices report their deployment id, so you can tell which campaign a
+  machine came from.
+- **macOS / Linux** — a zip with the bundled agent, launcher, and node-pty.
+
+```bash
+npm run build   # once, so the server can find the agent source
+```
+
+**Code signing and Windows security.** An exe is only as trustworthy as its
+signature. Without one, Windows SmartScreen / Smart App Control will warn
+about — or outright block — the file on user machines (this is exactly why
+commercial RMMs ship signed installers). To sign the built exe, give the
+server a certificate (Windows SDK's `signtool` must be on PATH):
+
+```bash
+RMM_SIGNING_PFX=/path/to/cert.pfx RMM_SIGNING_PFX_PASSWORD=... npm run start:server
+```
+
+The zip builds and distribution through your own channels (your RMM itself,
+file share, USB) avoid the download-time warnings without signing. Installer
+builds are recorded in the audit log with their SHA-256.
 
 ## Audit log
 

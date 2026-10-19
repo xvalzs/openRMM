@@ -7,6 +7,7 @@ import Alerts from "./Alerts.js";
 import Jobs from "./Jobs.js";
 import Updates from "./Updates.js";
 import Files from "./Files.js";
+import Installers from "./Installers.js";
 import Keys from "./Keys.js";
 import Users from "./Users.js";
 import Audit from "./Audit.js";
@@ -68,6 +69,8 @@ export default function App(): React.JSX.Element {
       <Updates isAdmin={isAdmin} />
     ) : view === "files" && isAdmin ? (
       <Files />
+    ) : view === "installers" && isAdmin ? (
+      <Installers />
     ) : view === "keys" ? (
       <Keys />
     ) : view === "users" && isAdmin ? (

@@ -52,6 +52,8 @@ export interface RegisterRequest {
   installKey: string;
   clientId: string;
   machine: MachineInfo;
+  /** Installer-build deployment campaign, when the agent was built by the server. */
+  deploymentId?: string;
 }
 
 /** Response to a successful registration. */
@@ -139,6 +141,8 @@ export interface Device {
   online: boolean;
   firstSeen: number;
   lastSeen: number;
+  /** Installer-build deployment campaign this device came from, if any. */
+  deploymentId: string | null;
 }
 
 /** Response of `GET /api/devices`. */
@@ -344,6 +348,20 @@ export interface AuditEntry {
   target: string | null;
   ip: string | null;
   meta: string | null;
+}
+
+// ---- Installers ------------------------------------------------------------------------
+
+export interface InstallerInfo {
+  id: string;
+  name: string;
+  filename: string;
+  target: "windows" | "posix";
+  deploymentId: string;
+  sha256: string;
+  size: number;
+  createdAt: number;
+  createdBy: string;
 }
 
 // ---- Processes ----------------------------------------------------------------------

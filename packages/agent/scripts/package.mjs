@@ -73,12 +73,24 @@ fs.writeFileSync(
 );
 
 // 5. node-pty (MIT) for real terminal shells. The bundled agent loads it
-//    via createRequire from its own directory.
+//    via createRequire from its own directory; the native binaries live in
+//    optional @lydell/node-pty-<platform> packages.
 const nodePtySrc = path.join(pkgDir, "..", "..", "node_modules", "@lydell", "node-pty");
 if (fs.existsSync(nodePtySrc)) {
   fs.cpSync(nodePtySrc, path.join(outDir, "node_modules", "@lydell", "node-pty"), {
     recursive: true,
   });
+  const scopeDir = path.dirname(nodePtySrc);
+  for (const entryName of fs.readdirSync(scopeDir)) {
+    if (entryName.startsWith("node-pty-")) {
+      const dir = path.join(scopeDir, entryName);
+      if (fs.statSync(dir).isDirectory()) {
+        fs.cpSync(dir, path.join(outDir, "node_modules", "@lydell", entryName), {
+          recursive: true,
+        });
+      }
+    }
+  }
 }
 
 // 4. Zip on Windows; leave the folder elsewhere.

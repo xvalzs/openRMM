@@ -6,10 +6,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { DriveInfo, MachineInfo, Metrics } from "@openrmm/shared";
-
-const here = path.dirname(fileURLToPath(import.meta.url));
+import { getSelfPath } from "./paths.js";
 
 declare global {
   // Injected at bundle time (see scripts/package.mjs) so the packaged
@@ -23,7 +21,7 @@ export function agentVersion(): string {
   }
   try {
     const pkg = JSON.parse(
-      fs.readFileSync(path.join(here, "..", "package.json"), "utf8"),
+      fs.readFileSync(path.join(path.dirname(getSelfPath()), "..", "package.json"), "utf8"),
     ) as { version?: string };
     return pkg.version ?? "unknown";
   } catch {

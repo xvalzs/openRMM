@@ -12,8 +12,8 @@ import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { agentHome } from "./config.js";
+import { getSelfPath } from "./paths.js";
 
 export const SERVICE_ID = "openrmm-agent";
 export const SERVICE_NAME = "OpenRMM Agent";
@@ -21,9 +21,9 @@ const MAC_LABEL = "com.openrmm.agent";
 
 export type ServiceAction = "install" | "uninstall" | "start" | "stop" | "status";
 
-/** Path of the script that runs the agent (the bundle, or dist/index.js). */
+/** Path of the script that runs the agent (the bundle, dist/index.js, or exe). */
 export function agentEntryPath(): string {
-  const self = fileURLToPath(import.meta.url);
+  const self = getSelfPath();
   // In the repo build service.js lives next to index.js in dist/.
   if (path.basename(self) === "service.js") {
     return path.join(path.dirname(self), "index.js");
@@ -78,7 +78,7 @@ function winswExe(): string {
   const candidates: string[] = [
     path.join(path.dirname(agentEntryPath()), "winsw.exe"),
     path.join(
-      path.dirname(fileURLToPath(import.meta.url)),
+      path.dirname(getSelfPath()),
       "..",
       "..",
       "vendor",

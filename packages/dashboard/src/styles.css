@@ -1372,3 +1372,20 @@ button.ghost.danger:hover {
   text-decoration: none;
   font-size: 12px;
 }
+
+/* ---- installers page ------------------------------------------------------------------ */
+
+.installers-page {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.installer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}

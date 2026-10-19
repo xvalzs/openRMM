@@ -13,8 +13,8 @@ import { createHash } from "node:crypto";
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import type { AgentMessage, ServerMessage } from "@openrmm/shared";
+import { getSelfPath } from "./paths.js";
 
 export interface UpdateManager {
   handle(msg: ServerMessage): void;
@@ -25,7 +25,7 @@ export function createUpdateManager(
   log: (msg: string) => void,
 ): UpdateManager {
   function runningScript(): string | null {
-    const self = fileURLToPath(import.meta.url);
+    const self = getSelfPath();
     // Only the packaged single-file build can self-replace.
     if (path.basename(self) !== "openrmm-agent.js") return null;
     return self;

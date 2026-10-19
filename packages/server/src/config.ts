@@ -19,6 +19,8 @@ export interface ServerConfig {
   sessionSecret: string;
   /** TLS config. Set `RMM_TLS_CERT` / `RMM_TLS_KEY` to serve over HTTPS/WSS. */
   tls: { cert: string; key: string } | null;
+  /** Public URL agents should use to reach this server (installer builds). */
+  publicUrl: string | null;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
@@ -39,5 +41,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
       env.RMM_TLS_CERT && env.RMM_TLS_KEY
         ? { cert: env.RMM_TLS_CERT, key: env.RMM_TLS_KEY }
         : null,
+    publicUrl: env.RMM_PUBLIC_URL?.trim() || null,
   };
 }

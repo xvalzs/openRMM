@@ -54,3 +54,29 @@ export function removeConfig(home: string = agentHome()): void {
 export function newClientId(): string {
   return randomUUID();
 }
+
+// ---- Embedded configuration (installer builds) ---------------------------
+
+export interface EmbeddedDefaults {
+  serverUrl?: string;
+  installKey?: string;
+  deploymentId?: string;
+  autoService?: boolean;
+}
+
+declare global {
+  /** JSON-encoded defaults injected at build time (installer builds). */
+  var __OPENRMM_DEFAULTS__: string | undefined;
+}
+
+export function embeddedDefaults(): EmbeddedDefaults {
+  try {
+    if (typeof globalThis.__OPENRMM_DEFAULTS__ === "string") {
+      const parsed = JSON.parse(globalThis.__OPENRMM_DEFAULTS__) as EmbeddedDefaults;
+      return parsed ?? {};
+    }
+  } catch {
+    /* malformed defaults are ignored */
+  }
+  return {};
+}

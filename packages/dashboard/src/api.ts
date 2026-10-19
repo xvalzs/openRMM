@@ -14,6 +14,7 @@ import type {
   DeviceListResponse,
   DeviceUpdateInfo,
   FileTransferInfo,
+  InstallerInfo,
   JobDetail,
   JobSummary,
   ProcessInfo,
@@ -187,4 +188,23 @@ export const api = {
     request<{ sessionId: string }>(`/api/devices/${deviceId}/screen`, { method: "POST" }),
   endScreen: (sessionId: string) =>
     request<{ ok: true }>(`/api/screens/${sessionId}`, { method: "DELETE" }),
+
+  // Installers
+  installers: () => request<{ installers: InstallerInfo[] }>("/api/installers"),
+  installerDefaults: () =>
+    request<{ serverUrl: string; installKey: string }>("/api/installers/defaults"),
+  buildInstaller: (input: {
+    name: string;
+    target: "windows" | "posix";
+    serverUrl?: string;
+    installKey?: string;
+    autoService?: boolean;
+  }) =>
+    request<InstallerInfo>("/api/installers", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
+  deleteInstaller: (id: string) =>
+    request<{ ok: true }>(`/api/installers/${id}`, { method: "DELETE" }),
+  installerDownloadUrl: (id: string) => `/api/installers/${id}/download`,
 };

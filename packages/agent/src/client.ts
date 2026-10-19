@@ -10,6 +10,7 @@ import {
   type ServerMessage,
 } from "@openrmm/shared";
 import type { AgentConfig } from "./config.js";
+import { embeddedDefaults } from "./config.js";
 import { collectMachineInfo, collectMetrics } from "./inventory.js";
 import { createShellManager } from "./shells.js";
 import { createJobManager } from "./jobs.js";
@@ -63,15 +64,18 @@ export function createAgentClient(config: AgentConfig, log: (msg: string) => voi
   }
 
   async function register(): Promise<RegisterResponse> {
+    const defaults = embeddedDefaults();
+    const body: Record<string, unknown> = {
+      protocolVersion: PROTOCOL_VERSION,
+      installKey: config.installKey,
+      clientId: config.clientId,
+      machine: collectMachineInfo(),
+    };
+    if (defaults.deploymentId) body.deploymentId = defaults.deploymentId;
     const res = await fetch(`${config.serverUrl}/api/agent/register`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        protocolVersion: PROTOCOL_VERSION,
-        installKey: config.installKey,
-        clientId: config.clientId,
-        machine: collectMachineInfo(),
-      }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");

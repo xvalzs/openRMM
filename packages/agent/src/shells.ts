@@ -10,6 +10,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createRequire } from "node:module";
 import type { AgentMessage, ServerMessage } from "@openrmm/shared";
+import { getSelfPath } from "./paths.js";
 
 export interface ShellManager {
   handle(msg: ServerMessage): void;
@@ -40,10 +41,10 @@ interface PtyModule {
 
 function loadPty(): PtyModule | null {
   try {
-    // Resolves relative to this file: the bundled agent ships node-pty in a
-    // node_modules folder next to itself; the repo build walks up to the
-    // workspace node_modules.
-    const req = createRequire(import.meta.url);
+    // Resolves relative to this file: the packaged release ships node-pty
+    // in a node_modules folder next to the bundle/exe; the repo build walks
+    // up to the workspace node_modules.
+    const req = createRequire(getSelfPath());
     return req("@lydell/node-pty") as PtyModule;
   } catch {
     return null;

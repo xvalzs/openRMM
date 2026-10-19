@@ -171,6 +171,11 @@ export default function DeviceDetail({ device, onClose, onOpenShell, onOpenScree
         <div className="device-id" title={device.id}>
           {device.id}
         </div>
+        {device.deploymentId && (
+          <div className="dim" style={{ marginTop: 8, fontSize: 11 }}>
+            deployment: <span className="mono">{device.deploymentId.slice(0, 8)}</span>
+          </div>
+        )}
       </section>
 
       {isAdmin && device.online && (

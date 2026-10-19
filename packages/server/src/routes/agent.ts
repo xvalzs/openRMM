@@ -99,7 +99,7 @@ export function registerAgentRoutes(
 
     const token = randomHex(32);
     const ip = req.ip;
-    store.registerDevice(body.clientId, body.machine, sha256Hex(token), ip, Date.now());
+    store.registerDevice(body.clientId, body.machine, sha256Hex(token), ip, Date.now(), body.deploymentId);
     updates.onDeviceReconnect(body.clientId, body.machine.agentVersion);
 
     const response: RegisterResponse = {

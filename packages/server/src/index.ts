@@ -26,6 +26,7 @@ import { registerApiKeyRoutes } from "./routes/keys.js";
 import { registerAuditRoutes } from "./routes/audit.js";
 import { registerFileRoutes } from "./routes/files.js";
 import { registerProcessRoutes } from "./routes/processes.js";
+import { registerInstallerRoutes } from "./routes/installers.js";
 import { ShellHub, registerShellRoutes } from "./shell.js";
 import { ScreenHub, registerScreenRoutes } from "./screen.js";
 import { AlertService } from "./alerts.js";
@@ -33,6 +34,7 @@ import { JobsService } from "./jobs.js";
 import { UpdatesService } from "./updates.js";
 import { TransfersService } from "./transfers.js";
 import { ProcessesService } from "./processes.js";
+import { InstallerBuilder } from "./installers.js";
 
 const VERSION = "0.1.0";
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -69,6 +71,7 @@ async function main(): Promise<void> {
   const updatesService = new UpdatesService(store, sockets);
   const transfersService = new TransfersService(store, sockets, config.dataDir);
   const processesService = new ProcessesService(sockets);
+  const installerBuilder = new InstallerBuilder(store, config.dataDir, VERSION);
 
   const app = Fastify({
     logger: { level: process.env.RMM_LOG_LEVEL ?? "info" },
@@ -127,6 +130,7 @@ async function main(): Promise<void> {
   registerAuditRoutes(app, store);
   registerFileRoutes(app, store, transfersService);
   registerProcessRoutes(app, store, processesService);
+  registerInstallerRoutes(app, store, installerBuilder, config.publicUrl);
   registerShellRoutes(app, store, sockets, shellHub);
   registerScreenRoutes(app, store, sockets, screenHub);
 

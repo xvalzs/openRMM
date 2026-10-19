@@ -10,9 +10,11 @@
  * SPDX-License-Identifier: AGPL-3.0-or-later
  */
 import { agentVersion } from "./inventory.js";
-import { agentHome, loadConfig, newClientId, removeConfig, writeConfig } from "./config.js";
+import { agentHome, embeddedDefaults, loadConfig, newClientId, removeConfig, writeConfig } from "./config.js";
 import { createAgentClient } from "./client.js";
 import { runServiceAction, type ServiceAction } from "./service.js";
+import { agentEntryPath } from "./service.js";
+import { spawn } from "node:child_process";
 
 const USAGE = `
 OpenRMM agent
@@ -96,8 +98,29 @@ function main(): void {
         process.exit(1);
       }
       if (!config) {
-        console.error("no config found. Run `openrmm-agent install --server <url> --key <key>` first.");
-        process.exit(1);
+        // Installer builds carry the server URL + key inside the binary.
+        const defaults = embeddedDefaults();
+        if (defaults.serverUrl && defaults.installKey) {
+          config = {
+            serverUrl: defaults.serverUrl.replace(/\/+$/, ""),
+            installKey: defaults.installKey,
+            clientId: newClientId(),
+          };
+          writeConfig(config);
+          log("first run: using embedded installer configuration");
+          if (defaults.autoService && process.platform === "win32") {
+            log("attempting automatic service installation…");
+            const child = spawn(process.execPath, [agentEntryPath(), "service", "install"], {
+              detached: true,
+              stdio: "ignore",
+              windowsHide: true,
+            });
+            child.unref();
+          }
+        } else {
+          console.error("no config found. Run `openrmm-agent install --server <url> --key <key>` first.");
+          process.exit(1);
+        }
       }
       const client = createAgentClient(config, log);
       process.on("SIGINT", () => client.stop());

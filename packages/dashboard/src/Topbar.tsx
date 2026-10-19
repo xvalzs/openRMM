@@ -1,6 +1,6 @@
 import type { SessionInfo } from "@openrmm/shared";
 
-export type View = "devices" | "alerts" | "jobs" | "updates" | "files" | "keys" | "users" | "audit";
+export type View = "devices" | "alerts" | "jobs" | "updates" | "files" | "installers" | "keys" | "users" | "audit";
 
 interface TopbarProps {
   session: SessionInfo;
@@ -16,6 +16,7 @@ export default function Topbar({ session, view, onNavigate, onLogout }: TopbarPr
     { id: "jobs", label: "Jobs" },
     { id: "updates", label: "Updates" },
     { id: "files", label: "Files", adminOnly: true },
+    { id: "installers", label: "Installers", adminOnly: true },
     { id: "keys", label: "API Keys" },
     { id: "users", label: "Users", adminOnly: true },
     { id: "audit", label: "Audit", adminOnly: true },

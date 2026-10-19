@@ -15,6 +15,7 @@ import type {
   AuditEntry,
   Device,
   DriveInfo,
+  InstallerInfo,
   JobDetail,
   JobResult,
   JobSummary,
@@ -46,6 +47,7 @@ export interface DeviceRow {
   online: number;
   first_seen: number;
   last_seen: number;
+  deployment_id: string | null;
 }
 
 export class Store {
@@ -185,6 +187,18 @@ export class Store {
       );
 
       CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit_log(ts);
+
+      CREATE TABLE IF NOT EXISTS installers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        filename TEXT NOT NULL,
+        target TEXT NOT NULL,
+        deployment_id TEXT NOT NULL,
+        sha256 TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        created_at INTEGER NOT NULL,
+        created_by TEXT NOT NULL
+      );
     `);
 
     // users.role was added after the initial schema; backfill on upgrade.
@@ -206,6 +220,9 @@ export class Store {
     }
     if (!deviceCols.some((c) => c.name === "update_checked_at")) {
       this.db.exec("ALTER TABLE devices ADD COLUMN update_checked_at INTEGER");
+    }
+    if (!deviceCols.some((c) => c.name === "deployment_id")) {
+      this.db.exec("ALTER TABLE devices ADD COLUMN deployment_id TEXT");
     }
   }
 
@@ -347,14 +364,15 @@ export class Store {
     token: string,
     ip: string,
     firstSeen: number,
+    deploymentId?: string,
   ): void {
     this.db
       .prepare(
         `INSERT INTO devices (
            id, token_hash, hostname, os, os_version, platform, arch,
            cpu_model, cpu_count, total_mem, drives_json, agent_version,
-           last_ip, first_seen, last_seen
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           last_ip, deployment_id, first_seen, last_seen
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(id) DO UPDATE SET
            token_hash = excluded.token_hash,
            hostname = excluded.hostname,
@@ -368,6 +386,7 @@ export class Store {
            drives_json = excluded.drives_json,
            agent_version = excluded.agent_version,
            last_ip = excluded.last_ip,
+           deployment_id = COALESCE(excluded.deployment_id, devices.deployment_id),
            last_seen = excluded.last_seen`,
       )
       .run(
@@ -384,6 +403,7 @@ export class Store {
         JSON.stringify(machine.drives),
         machine.agentVersion,
         ip,
+        deploymentId ?? null,
         firstSeen,
         Date.now(),
       );
@@ -1043,6 +1063,72 @@ export class Store {
       meta: r.meta,
     }));
   }
+
+  // ---- installers -----------------------------------------------------------
+
+  createInstaller(record: InstallerInfo): void {
+    this.db
+      .prepare(
+        `INSERT INTO installers (id, name, filename, target, deployment_id, sha256, size, created_at, created_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        record.id,
+        record.name,
+        record.filename,
+        record.target,
+        record.deploymentId,
+        record.sha256,
+        record.size,
+        record.createdAt,
+        record.createdBy,
+      );
+  }
+
+  listInstallers(): InstallerInfo[] {
+    const rows = this.db
+      .prepare("SELECT * FROM installers ORDER BY created_at DESC LIMIT 100")
+      .all() as unknown as InstallerRow[];
+    return rows.map(rowToInstaller);
+  }
+
+  getInstaller(id: string): InstallerInfo | null {
+    const row = this.db
+      .prepare("SELECT * FROM installers WHERE id = ?")
+      .get(id) as unknown as InstallerRow | undefined;
+    return row ? rowToInstaller(row) : null;
+  }
+
+  deleteInstaller(id: string): boolean {
+    const res = this.db.prepare("DELETE FROM installers WHERE id = ?").run(id);
+    return res.changes > 0;
+  }
+}
+
+interface InstallerRow {
+  id: string;
+  name: string;
+  filename: string;
+  target: string;
+  deployment_id: string;
+  sha256: string;
+  size: number;
+  created_at: number;
+  created_by: string;
+}
+
+function rowToInstaller(row: InstallerRow): InstallerInfo {
+  return {
+    id: row.id,
+    name: row.name,
+    filename: row.filename,
+    target: row.target as InstallerInfo["target"],
+    deploymentId: row.deployment_id,
+    sha256: row.sha256,
+    size: row.size,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+  };
 }
 
 function rowToDevice(row: DeviceRow): Device {
@@ -1071,6 +1157,7 @@ function rowToDevice(row: DeviceRow): Device {
     online: row.online === 1,
     firstSeen: row.first_seen,
     lastSeen: row.last_seen,
+    deploymentId: row.deployment_id ?? null,
   };
 }
 
