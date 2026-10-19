@@ -8,7 +8,7 @@
  *     LICENSE
  *     README.txt
  *
- * plus openrmm-agent-v<version>.zip (Windows) or the bare folder.
+ * plus openrmm-agent-v<version>.zip.
  *
  * Targets only need Node.js >= 24 installed.
  *
@@ -18,7 +18,8 @@ import { build } from "esbuild";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { execFileSync } from "node:child_process";
+import { finished } from "node:stream/promises";
+import archiver from "archiver";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const pkgDir = path.join(here, "..");
@@ -93,23 +94,20 @@ if (fs.existsSync(nodePtySrc)) {
   }
 }
 
-// 4. Zip on Windows; leave the folder elsewhere.
-if (process.platform === "win32") {
-  const zip = path.join(releaseRoot, `openrmm-agent-v${version}.zip`);
-  fs.rmSync(zip, { force: true });
-  execFileSync(
-    "powershell",
-    [
-      "-NoProfile",
-      "-Command",
-      `Compress-Archive -Path '${outDir}' -DestinationPath '${zip}'`,
-    ],
-    { stdio: "inherit" },
-  );
-  console.log(`\nPackaged: ${zip}`);
-} else {
-  console.log(`\nPackaged: ${outDir}`);
-}
+// 4. Zip the release (cross-platform).
+const zip = path.join(releaseRoot, `openrmm-agent-v${version}.zip`);
+fs.rmSync(zip, { force: true });
+const output = fs.createWriteStream(zip);
+const archive = archiver("zip", { zlib: { level: 6 } });
+const done = finished(output);
+archive.on("error", (e) => {
+  if (e) output.destroy(e);
+});
+archive.pipe(output);
+archive.directory(outDir, false);
+await archive.finalize();
+await done;
+console.log(`\nPackaged: ${zip}`);
 
 function readmeText(v) {
   return [

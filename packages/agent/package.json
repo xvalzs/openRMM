@@ -17,6 +17,7 @@
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "archiver": "6.0.2",
     "esbuild": "^0.28.0",
     "typescript": "^5.9.0"
   }

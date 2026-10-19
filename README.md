@@ -59,6 +59,23 @@ Linux agent builds, SSO/OIDC.
 
 ## Quick start
 
+**Docker (fastest — no Node.js needed):**
+
+```bash
+docker run -d --name openrmm \
+  -p 8787:8787 \
+  -v openrmm-data:/app/data \
+  -e RMM_ADMIN_PASSWORD='pick-a-strong-password' \
+  ghcr.io/xvalzs/openrmm:latest
+# dashboard: http://localhost:8787 (admin / your password)
+# the boot log prints the install key for agent deployment
+```
+
+The image is published automatically by CI on every push to `main`.
+Build it yourself with `docker compose up -d --build` if you prefer.
+
+**From source:**
+
 ```bash
 # 1. Install and build everything
 npm install
@@ -129,9 +146,14 @@ cloudflared tunnel run openrmm
 Then start the server with `RMM_PUBLIC_URL=https://rmm.example.com` so
 agents and installer builds use the public hostname.
 
-**B. Docker (recommended for a VPS)**
+**B. Docker (recommended for a VPS — or a prebuilt image)**
 
 ```bash
+# published image (CI builds it from main):
+docker run -d --name openrmm -p 8787:8787 -v openrmm-data:/app/data \
+  -e RMM_ADMIN_PASSWORD=... ghcr.io/xvalzs/openrmm:latest
+
+# or build from source:
 docker compose up -d --build
 # data lives in ./data (SQLite + uploads + installers)
 ```
