@@ -24,9 +24,12 @@ export interface ServerConfig {
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
-  const port = Number(env.RMM_PORT ?? 8787);
+  // PaaS hosts (Railway, Render, …) inject the expected listen port via
+  // PORT; RMM_PORT still takes precedence for self-hosted deployments.
+  const rawPort = env.RMM_PORT ?? env.PORT ?? "8787";
+  const port = Number(rawPort);
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
-    throw new Error(`RMM_PORT must be a valid port number, got: ${env.RMM_PORT}`);
+    throw new Error(`RMM_PORT must be a valid port number, got: ${rawPort}`);
   }
   return {
     host: env.RMM_HOST ?? "0.0.0.0",

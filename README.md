@@ -160,7 +160,13 @@ docker compose up -d --build
 
 Also deployable on PaaS hosts that accept a root Dockerfile (e.g.
 **Railway**: connect the repo, then attach a Railway Volume mounted at
-`/app/data` so the database survives redeploys).
+`/app/data` so the database survives redeploys). Set the environment
+variables in the service settings: `RMM_ADMIN_PASSWORD`,
+`RMM_SESSION_SECRET` (any long random string), and `RMM_PUBLIC_URL`
+(your `*.up.railway.app` domain, e.g.
+`https://openrmm-production.up.railway.app`). The server listens on
+Railway's `PORT` automatically, and the generated install key appears
+in the deploy logs.
 
 Put Cloudflare's proxy in front of the VPS (orange-cloud the DNS record)
 or run a Tunnel to the container — either way the dashboard, agent
