@@ -1,6 +1,8 @@
 # OpenRMM server image.
 # Build:  docker build -t openrmm .
 # Run:    docker run -p 8787:8787 -v openrmm-data:/app/data -e RMM_ADMIN_PASSWORD=... openrmm
+# Persistent data lives in /app/data — mount a volume there (Docker -v,
+# docker-compose volume, or a Railway Volume at /app/data).
 
 FROM node:24-bookworm-slim AS build
 WORKDIR /app
@@ -31,5 +33,4 @@ COPY --from=build /app/packages/agent/src packages/agent/src
 COPY --from=build /app/packages/agent/vendor packages/agent/vendor
 COPY --from=build /app/LICENSE LICENSE
 EXPOSE 8787
-VOLUME ["/app/data"]
 CMD ["node", "packages/server/dist/index.js"]

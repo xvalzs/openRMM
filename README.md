@@ -158,6 +158,10 @@ docker compose up -d --build
 # data lives in ./data (SQLite + uploads + installers)
 ```
 
+Also deployable on PaaS hosts that accept a root Dockerfile (e.g.
+**Railway**: connect the repo, then attach a Railway Volume mounted at
+`/app/data` so the database survives redeploys).
+
 Put Cloudflare's proxy in front of the VPS (orange-cloud the DNS record)
 or run a Tunnel to the container — either way the dashboard, agent
 WebSockets, file transfers, and shells all work through it.
