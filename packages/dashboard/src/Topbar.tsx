@@ -24,7 +24,7 @@ export default function Topbar({ session, view, onNavigate, onLogout }: TopbarPr
   return (
     <header className="topbar">
       <div className="topbar-brand">
-        <span className="brand-mark" aria-hidden="true" />
+        <img className="brand-mark" src="/logo.svg" alt="OpenRMM logo" />
         <span className="brand-name">OpenRMM</span>
       </div>
       <nav className="nav">

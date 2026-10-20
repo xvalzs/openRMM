@@ -30,7 +30,7 @@ export default function Login({ onLogin }: LoginProps): React.JSX.Element {
     <div className="login-wrap">
       <form className="login-card" onSubmit={handleSubmit}>
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true" />
+          <img className="brand-mark" src="/logo.svg" alt="OpenRMM logo" />
           <h1>OpenRMM</h1>
         </div>
         <p className="login-sub">Remote Monitoring &amp; Management</p>

@@ -1,5 +1,9 @@
 # OpenRMM
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/xvalzs/openRMM/main/packages/dashboard/public/logo.svg" width="96" alt="OpenRMM logo" />
+</p>
+
 Open-source Remote Monitoring and Management (RMM). A lightweight agent runs on
 each endpoint, reports to a self-hosted central server over a persistent
 WebSocket channel, and you watch everything from a web dashboard.

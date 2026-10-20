@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="OpenRMM">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2dd4bf"/>
+      <stop offset="1" stop-color="#0f766e"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#g)"/>
+  <rect x="12" y="15" width="40" height="26" rx="3.5" fill="#04211e"/>
+  <path d="M12 29 h14 l3 -5 6 10 3 -5 h14" fill="none" stroke="#2dd4bf" stroke-width="2.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="12" cy="29" r="2.2" fill="#2dd4bf"/>
+  <circle cx="52" cy="29" r="2.2" fill="#2dd4bf"/>
+  <path d="M26 46 h12" stroke="#04211e" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="32" cy="8" r="3" fill="#a7f3d0"/>
+</svg>
