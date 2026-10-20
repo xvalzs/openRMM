@@ -111,6 +111,7 @@ export default function Installers(): React.JSX.Element {
             >
               <option value="windows-x64">Windows x64 (.exe)</option>
               <option value="windows-arm64">Windows ARM64 (.exe)</option>
+              <option value="windows-zip">Windows (.zip — no exe warnings)</option>
               <option value="posix">macOS / Linux (.zip)</option>
             </select>
             <label className="inline-label">

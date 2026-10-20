@@ -162,11 +162,12 @@ export class InstallerBuilder {
 
     const safeBase = input.name.replace(/[^a-zA-Z0-9 _.-]/g, "").trim().replace(/\s+/g, "-") || "OpenRMM-Agent";
     const isWindows = input.target.startsWith("windows-");
-    const filename = isWindows ? `${safeBase}.exe` : `${safeBase}.zip`;
+    const isZip = input.target === "posix" || input.target === "windows-zip";
+    const filename = isZip ? `${safeBase}.zip` : `${safeBase}.exe`;
     const entry = resolveAgentEntry();
     let filePath: string;
 
-    if (isWindows) {
+    if (!isZip) {
       const nodeBinary = await resolveNodeBinary(input.target, this.dataDir);
       const cjsPath = path.join(tmp, "agent.cjs");
       await build({
@@ -258,17 +259,31 @@ export class InstallerBuilder {
       const readme = path.join(tmp, "README.txt");
       fs.writeFileSync(
         readme,
-        [
-          "OpenRMM agent (pre-configured installer)",
-          "=========================================",
-          "",
-          "Run:  ./openrmm-agent run",
-          "The agent is already configured for your server and will connect",
-          "automatically on first run.",
-          "",
-          "Licensed under AGPL-3.0-or-later.",
-          "",
-        ].join("\n"),
+        input.target === "windows-zip"
+          ? [
+              "OpenRMM agent (pre-configured installer)",
+              "=========================================",
+              "",
+              "Requirements: Node.js >= 24 installed on this PC.",
+              "",
+              "Run:  double-click OpenRMM-Agent.cmd",
+              "The agent is already configured for your server and will connect",
+              "automatically on first run.",
+              "",
+              "Licensed under AGPL-3.0-or-later.",
+              "",
+            ].join("\r\n")
+          : [
+              "OpenRMM agent (pre-configured installer)",
+              "=========================================",
+              "",
+              "Run:  ./openrmm-agent run",
+              "The agent is already configured for your server and will connect",
+              "automatically on first run.",
+              "",
+              "Licensed under AGPL-3.0-or-later.",
+              "",
+            ].join("\n"),
       );
 
       filePath = path.join(outDir, filename);
@@ -280,7 +295,16 @@ export class InstallerBuilder {
       });
       archive.pipe(output);
       archive.file(jsPath, { name: "openrmm-agent.js" });
-      archive.file(launcher, { name: "openrmm-agent", mode: 0o755 });
+      if (input.target === "windows-zip") {
+        const cmdLauncher = path.join(tmp, "OpenRMM-Agent.cmd");
+        fs.writeFileSync(
+          cmdLauncher,
+          '@echo off\r\nnode "%~dp0openrmm-agent.js" run\r\n',
+        );
+        archive.file(cmdLauncher, { name: "OpenRMM-Agent.cmd" });
+      } else {
+        archive.file(launcher, { name: "openrmm-agent", mode: 0o755 });
+      }
       archive.file(readme, { name: "README.txt" });
       const license = path.resolve(
         path.dirname(fileURLToPath(import.meta.url)),
@@ -294,15 +318,17 @@ export class InstallerBuilder {
       if (nodePty) {
         archive.directory(nodePty, "node_modules/@lydell/node-pty");
         // Native binaries ship in optional @lydell/node-pty-<platform>
-        // packages; include whatever platform packages are installed.
+        // packages. Windows zips carry only Windows binaries; posix zips
+        // carry the macOS/Linux ones.
         const scopeDir = path.dirname(nodePty);
         if (fs.existsSync(scopeDir)) {
           for (const entryName of fs.readdirSync(scopeDir)) {
-            if (entryName.startsWith("node-pty-")) {
-              const dir = path.join(scopeDir, entryName);
-              if (fs.statSync(dir).isDirectory()) {
-                archive.directory(dir, `node_modules/@lydell/${entryName}`);
-              }
+            if (!entryName.startsWith("node-pty-")) continue;
+            if (input.target === "windows-zip" && !entryName.includes("win32")) continue;
+            if (input.target === "posix" && entryName.includes("win32")) continue;
+            const dir = path.join(scopeDir, entryName);
+            if (fs.statSync(dir).isDirectory()) {
+              archive.directory(dir, `node_modules/@lydell/${entryName}`);
             }
           }
         }

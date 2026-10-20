@@ -37,7 +37,9 @@ export function registerInstallerRoutes(
       ? "posix"
       : body.target === "windows-arm64"
         ? "windows-arm64"
-        : "windows-x64";
+        : body.target === "windows-zip"
+          ? "windows-zip"
+          : "windows-x64";
     if (body.serverUrl !== undefined && (typeof body.serverUrl !== "string" || !/^https?:\/\//.test(body.serverUrl))) {
       return reply.code(400).send({ error: "serverUrl must start with http:// or https://" });
     }

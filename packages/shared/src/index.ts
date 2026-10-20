@@ -352,7 +352,7 @@ export interface AuditEntry {
 
 // ---- Installers ------------------------------------------------------------------------
 
-export type InstallerTarget = "windows-x64" | "windows-arm64" | "posix";
+export type InstallerTarget = "windows-x64" | "windows-arm64" | "windows-zip" | "posix";
 
 export interface InstallerInfo {
   id: string;
