@@ -97,6 +97,99 @@ function resolveNodePtyDir(): string | null {
   }
 }
 
+/**
+ * Remove the Authenticode signature from a Windows PE executable by
+ * zeroing the Security (certificate table) data directory entry. The
+ * node.exe used as the SEA base ships signed; injecting the SEA blob
+ * corrupts that signature, and signing tools refuse to replace a
+ * corrupted signature. Node's own SEA docs recommend removing the old
+ * signature before re-signing (signtool remove /s) — this does the same
+ * without signtool.
+ */
+function stripAuthenticodeSignature(filePath: string): void {
+  const buf = fs.readFileSync(filePath);
+  const peOffset = buf.readUInt32LE(0x3c);
+  if (buf.toString("ascii", peOffset, peOffset + 4) !== "PE\0\0") return;
+  const optHeader = peOffset + 24;
+  const magic = buf.readUInt16LE(optHeader);
+  let dirStart: number;
+  if (magic === 0x20b) {
+    dirStart = optHeader + 112; // PE32+
+  } else if (magic === 0x10b) {
+    dirStart = optHeader + 96; // PE32
+  } else {
+    return;
+  }
+  const numDirs = buf.readUInt32LE(magic === 0x20b ? optHeader + 108 : optHeader + 92);
+  if (numDirs <= 4) return;
+  const secEntry = dirStart + 4 * 8;
+  if (buf.readUInt32LE(secEntry) === 0 && buf.readUInt32LE(secEntry + 4) === 0) return;
+  buf.writeUInt32LE(0, secEntry); // VirtualAddress
+  buf.writeUInt32LE(0, secEntry + 4); // Size
+  fs.writeFileSync(filePath, buf);
+}
+
+/**
+ * Authenticode-sign a Windows executable with the configured PFX.
+ * Prefers signtool (Windows SDK); falls back to PowerShell's
+ * Set-AuthenticodeSignature so signing works on servers without the SDK.
+ * Throws if signing is configured but fails — never silently ships an
+ * unsigned installer when a certificate was provided.
+ */
+function signExecutable(filePath: string, pfx: string, password: string): void {
+  const trySigntool = (): boolean => {
+    try {
+      execFileSync(
+        "signtool",
+        [
+          "sign",
+          "/fd", "SHA256",
+          "/f", pfx,
+          "/p", password,
+          "/tr", "http://timestamp.digicert.com",
+          "/td", "SHA256",
+          filePath,
+        ],
+        { stdio: "pipe" },
+      );
+      return true;
+    } catch (err) {
+      const e = err as { code?: unknown };
+      // ENOENT = signtool not installed → fall back to PowerShell.
+      if (e.code !== "ENOENT") throw err;
+      return false;
+    }
+  };
+
+  const tryPowerShell = (): void => {
+    // Run the signing via -EncodedCommand so the PFX password never
+    // appears on a command line, and quoting is not an issue. Uses the
+    // .NET X509Certificate2 constructor (Get-PfxCertificate -Password is
+    // PS 7 only) so it works on Windows PowerShell 5.1 as well.
+    const script = [
+      "$ErrorActionPreference = 'Stop'",
+      `$pw = '${password.replace(/'/g, "''")}'`,
+      `$pfx = '${pfx.replace(/'/g, "''")}'`,
+      `$file = '${filePath.replace(/'/g, "''")}'`,
+      "$cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2",
+      "$cert.Import($pfx, $pw, 'Exportable')",
+      "Set-AuthenticodeSignature -FilePath $file -Certificate $cert " +
+        "-TimestampServer 'http://timestamp.digicert.com' -HashAlgorithm SHA256 | Out-Null",
+      // Fail fast if the result is not actually signed with a matching hash.
+      "$sig = Get-AuthenticodeSignature -FilePath $file",
+      "if ($sig.Status -eq 'NotSigned' -or $sig.Status -eq 'HashMismatch') { throw \"signature status: $($sig.Status)\" }",
+    ].join("\n");
+    const encoded = Buffer.from(script, "utf16le").toString("base64");
+    execFileSync(
+      "powershell",
+      ["-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+      { stdio: "pipe" },
+    );
+  };
+
+  if (!trySigntool()) tryPowerShell();
+}
+
 /** Node binary for the target architecture (SEA base executable). */
 async function resolveNodeBinary(
   target: InstallerTarget,
@@ -217,26 +310,12 @@ export class InstallerBuilder {
       // Signing also makes renames safe by construction (Authenticode
       // hashes content, not the file name).
       const pfx = process.env.RMM_SIGNING_PFX;
-      if (pfx && fs.existsSync(pfx)) {
-        const pw = process.env.RMM_SIGNING_PFX_PASSWORD ?? "";
-        execFileSync(
-          "signtool",
-          [
-            "sign",
-            "/fd",
-            "SHA256",
-            "/f",
-            pfx,
-            "/p",
-            pw,
-            "/tr",
-            "http://timestamp.digicert.com",
-            "/td",
-            "SHA256",
-            filePath,
-          ],
-          { stdio: "pipe" },
-        );
+      if (pfx) {
+        if (!fs.existsSync(pfx)) {
+          throw new Error(`RMM_SIGNING_PFX set but file not found: ${pfx}`);
+        }
+        stripAuthenticodeSignature(filePath);
+        signExecutable(filePath, pfx, process.env.RMM_SIGNING_PFX_PASSWORD ?? "");
       }
     } else {
       const jsPath = path.join(tmp, "openrmm-agent.js");

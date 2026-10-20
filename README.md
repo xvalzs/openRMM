@@ -191,7 +191,7 @@ All server settings are environment variables:
 | `RMM_SESSION_SECRET`   | *(generated)*| HMAC key for session cookies; set it to persist sessions across restarts |
 | `RMM_TLS_CERT` / `RMM_TLS_KEY` | —     | Paths to a certificate/key to serve HTTPS/WSS             |
 | `RMM_PUBLIC_URL`       | *(derived)* | Public URL agents connect to; baked into installer builds |
-| `RMM_SIGNING_PFX`      | —           | PFX certificate used to sign built Windows installers (`signtool` required) |
+| `RMM_SIGNING_PFX`      | —           | PFX certificate used to sign built Windows installers (via `signtool`, or PowerShell's `Set-AuthenticodeSignature` if the SDK isn't installed) |
 | `RMM_SIGNING_PFX_PASSWORD` | —       | Password for the signing certificate                      |
 | `RMM_AGENT_SRC`        | *(repo path)* | Agent entry point for installer builds                  |
 | `RMM_LOG_LEVEL`        | `info`       | Fastify log level                                         |
