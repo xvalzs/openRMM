@@ -1122,7 +1122,8 @@ function rowToInstaller(row: InstallerRow): InstallerInfo {
     id: row.id,
     name: row.name,
     filename: row.filename,
-    target: row.target as InstallerInfo["target"],
+    // Legacy rows stored plain "windows" (pre-ARM64); map to x64.
+    target: (row.target === "windows" ? "windows-x64" : row.target) as InstallerInfo["target"],
     deploymentId: row.deployment_id,
     sha256: row.sha256,
     size: row.size,

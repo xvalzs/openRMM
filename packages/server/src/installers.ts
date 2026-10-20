@@ -18,7 +18,7 @@ import { randomUUID, createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { finished } from "node:stream/promises";
-import type { InstallerInfo } from "@openrmm/shared";
+import type { InstallerInfo, InstallerTarget } from "@openrmm/shared";
 import type { Store } from "./db.js";
 
 const SEA_FUSE = "NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2";
@@ -35,7 +35,7 @@ const archiver = require2("archiver") as unknown as ArchiverFn;
 
 export interface InstallerBuildInput {
   name: string;
-  target: "windows" | "posix";
+  target: InstallerTarget;
   serverUrl: string;
   installKey: string;
   autoService: boolean;
@@ -97,6 +97,44 @@ function resolveNodePtyDir(): string | null {
   }
 }
 
+/** Node binary for the target architecture (SEA base executable). */
+async function resolveNodeBinary(
+  target: InstallerTarget,
+  dataDir: string,
+): Promise<string> {
+  if (target === "windows-x64" || target === "posix") return process.execPath;
+
+  // Windows ARM64: env override, cached download, or fail with guidance.
+  const envPath = process.env.RMM_NODE_ARM64;
+  if (envPath && fs.existsSync(envPath)) return envPath;
+
+  const runtimeDir = path.join(dataDir, "installers", "_runtime");
+  const nodeDir = path.join(runtimeDir, `node-${process.version}-win-arm64`);
+  const nodeExe = path.join(nodeDir, "node.exe");
+  if (fs.existsSync(nodeExe)) return nodeExe;
+
+  fs.mkdirSync(runtimeDir, { recursive: true });
+  const zip = path.join(runtimeDir, `node-${process.version}-win-arm64.zip`);
+  const url = `https://nodejs.org/dist/${process.version}/node-${process.version}-win-arm64.zip`;
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) {
+    throw new Error(
+      `ARM64 Node download failed (HTTP ${res.status}) for ${url} — ` +
+        `set RMM_NODE_ARM64 to a local arm64 node.exe to build offline`,
+    );
+  }
+  fs.writeFileSync(zip, Buffer.from(await res.arrayBuffer()));
+  execFileSync(
+    "powershell",
+    ["-NoProfile", "-Command", `Expand-Archive -Path '${zip}' -DestinationPath '${runtimeDir}' -Force`],
+    { stdio: "pipe" },
+  );
+  if (!fs.existsSync(nodeExe)) {
+    throw new Error("ARM64 Node extraction failed; set RMM_NODE_ARM64 to a local arm64 node.exe");
+  }
+  return nodeExe;
+}
+
 export class InstallerBuilder {
   constructor(
     private readonly store: Store,
@@ -123,11 +161,13 @@ export class InstallerBuilder {
     };
 
     const safeBase = input.name.replace(/[^a-zA-Z0-9 _.-]/g, "").trim().replace(/\s+/g, "-") || "OpenRMM-Agent";
-    const filename = input.target === "windows" ? `${safeBase}.exe` : `${safeBase}.zip`;
+    const isWindows = input.target.startsWith("windows-");
+    const filename = isWindows ? `${safeBase}.exe` : `${safeBase}.zip`;
     const entry = resolveAgentEntry();
     let filePath: string;
 
-    if (input.target === "windows") {
+    if (isWindows) {
+      const nodeBinary = await resolveNodeBinary(input.target, this.dataDir);
       const cjsPath = path.join(tmp, "agent.cjs");
       await build({
         entryPoints: [entry],
@@ -159,7 +199,7 @@ export class InstallerBuilder {
       });
 
       filePath = path.join(outDir, filename);
-      fs.copyFileSync(process.execPath, filePath);
+      fs.copyFileSync(nodeBinary, filePath);
       const { inject } = require2("postject") as {
         inject: (
           filename: string,

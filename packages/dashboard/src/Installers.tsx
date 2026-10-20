@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import type { InstallerInfo } from "@openrmm/shared";
+import type { InstallerInfo, InstallerTarget } from "@openrmm/shared";
 import { api } from "./api.js";
 import { formatAgo, formatBytes } from "./format.js";
 
@@ -9,7 +9,7 @@ export default function Installers(): React.JSX.Element {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: "OpenRMM-Agent",
-    target: "windows" as "windows" | "posix",
+    target: "windows-x64" as InstallerTarget,
     serverUrl: "",
     installKey: "",
     autoService: false,
@@ -107,9 +107,10 @@ export default function Installers(): React.JSX.Element {
             />
             <select
               value={form.target}
-              onChange={(e) => setForm({ ...form, target: e.target.value as "windows" | "posix" })}
+              onChange={(e) => setForm({ ...form, target: e.target.value as InstallerTarget })}
             >
-              <option value="windows">Windows (.exe)</option>
+              <option value="windows-x64">Windows x64 (.exe)</option>
+              <option value="windows-arm64">Windows ARM64 (.exe)</option>
               <option value="posix">macOS / Linux (.zip)</option>
             </select>
             <label className="inline-label">

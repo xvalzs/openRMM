@@ -15,6 +15,7 @@ import type {
   DeviceUpdateInfo,
   FileTransferInfo,
   InstallerInfo,
+  InstallerTarget,
   JobDetail,
   JobSummary,
   ProcessInfo,
@@ -195,7 +196,7 @@ export const api = {
     request<{ serverUrl: string; installKey: string }>("/api/installers/defaults"),
   buildInstaller: (input: {
     name: string;
-    target: "windows" | "posix";
+    target: InstallerTarget;
     serverUrl?: string;
     installKey?: string;
     autoService?: boolean;

@@ -352,11 +352,13 @@ export interface AuditEntry {
 
 // ---- Installers ------------------------------------------------------------------------
 
+export type InstallerTarget = "windows-x64" | "windows-arm64" | "posix";
+
 export interface InstallerInfo {
   id: string;
   name: string;
   filename: string;
-  target: "windows" | "posix";
+  target: InstallerTarget;
   deploymentId: string;
   sha256: string;
   size: number;

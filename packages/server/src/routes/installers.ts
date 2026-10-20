@@ -33,7 +33,11 @@ export function registerInstallerRoutes(
     if (!name || name.length > 120) {
       return reply.code(400).send({ error: "name is required (max 120 characters)" });
     }
-    const target = body.target === "posix" ? "posix" : "windows";
+    const target = body.target === "posix"
+      ? "posix"
+      : body.target === "windows-arm64"
+        ? "windows-arm64"
+        : "windows-x64";
     if (body.serverUrl !== undefined && (typeof body.serverUrl !== "string" || !/^https?:\/\//.test(body.serverUrl))) {
       return reply.code(400).send({ error: "serverUrl must start with http:// or https://" });
     }
